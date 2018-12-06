@@ -19,14 +19,18 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=t
    }
 }
 
-__global__ void max2zero(int32_t* depth_in, float* depth_out, size_t length){
-    size_t index = blockIdx.x*blockDim.x + threadIdx.x;
+struct max2zero_functor{
 
-    if(index >= length) return;
-    depth_out[index] = (depth_in[index]==INT_MAX)? 0: float(depth_in[index]);
-}
+    max2zero_functor(){}
 
-namespace normal_functor{
+    __host__ __device__
+    float operator()(const int32_t& x) const
+    {
+      return (x==INT_MAX)? 0: float(x);
+    }
+};
+
+namespace normal_functor{  // similar to thrust
     __device__
     Model::float3 minus(const Model::float3& one, const Model::float3& the_other)
     {
@@ -177,42 +181,23 @@ __global__ void render_triangle(Model::Triangle* device_tris_ptr, size_t device_
     rasterization(local_tri, last_row, depth_entry, width, height);
 }
 
-__global__ void fill_int(int32_t* depth_image_vec, size_t length, int value){
-    size_t index = blockIdx.x*blockDim.x + threadIdx.x;
-
-    if(index >= length) return;
-    depth_image_vec[index] = value;
-}
-
 std::vector<float> cuda_renderer::render_cuda(const std::vector<Model::Triangle>& tris,const std::vector<Model::mat4x4>& poses,
                             size_t width, size_t height, const Model::mat4x4& proj_mat){
 
     const size_t threadsPerBlock = 256;
 
-    Model::Triangle* device_tris_ptr;
-    cudaMalloc((void**)&device_tris_ptr, tris.size()*sizeof(Model::Triangle));
-    cudaMemcpy(device_tris_ptr, tris.data(),
-               tris.size()*sizeof(Model::Triangle), cudaMemcpyHostToDevice);
-
-    Model::mat4x4* device_poses_ptr;
-    cudaMalloc((void**)&device_poses_ptr, poses.size()*sizeof(Model::mat4x4));
-    cudaMemcpy(device_poses_ptr, poses.data(),
-               poses.size()*sizeof(Model::mat4x4), cudaMemcpyHostToDevice);
+    thrust::device_vector<Model::Triangle> device_tris = tris;
+    thrust::device_vector<Model::mat4x4> device_poses = poses;
 
     // atomic min only support int32
-    int32_t* depth_image_vec;
-    cudaMalloc((void**)&depth_image_vec, poses.size()*width*height*sizeof(int32_t));
-    float* depth_image_vec_float;
-    cudaMalloc((void**)&depth_image_vec_float, poses.size()*width*height*sizeof(float));
-
-    { // fill with INT_MAX
-        size_t numBlocks = (poses.size()*width*height + threadsPerBlock - 1)/ threadsPerBlock;
-        fill_int<<<numBlocks, threadsPerBlock>>>(depth_image_vec, poses.size()*width*height, INT_MAX);
-        cudaThreadSynchronize();
-    }
-    // memory malloc OK
+    thrust::device_vector<int32_t> device_depth_int(poses.size()*width*height, INT_MAX);
+    thrust::device_vector<float> device_depth_float(poses.size()*width*height);
 
     {
+        Model::Triangle* device_tris_ptr = thrust::raw_pointer_cast(device_tris.data());
+        Model::mat4x4* device_poses_ptr = thrust::raw_pointer_cast(device_poses.data());
+        int32_t* depth_image_vec = thrust::raw_pointer_cast(device_depth_int.data());
+
         dim3 numBlocks((tris.size() + threadsPerBlock - 1) / threadsPerBlock, poses.size());
         render_triangle<<<numBlocks, threadsPerBlock>>>(device_tris_ptr, tris.size(),
                                                         device_poses_ptr, poses.size(),
@@ -220,22 +205,12 @@ std::vector<float> cuda_renderer::render_cuda(const std::vector<Model::Triangle>
         cudaThreadSynchronize();
         gpuErrchk(cudaPeekAtLastError());
     }
-    {
-        size_t numBlocks = (poses.size()*width*height + threadsPerBlock - 1)/ threadsPerBlock;
-        max2zero<<<numBlocks, threadsPerBlock>>>(depth_image_vec, depth_image_vec_float, poses.size()*width*height);
-        cudaThreadSynchronize();
-    }
+
+    thrust::transform(device_depth_int.begin(), device_depth_int.end(),
+                      device_depth_float.begin(), max2zero_functor());
 
     std::vector<float> result_depth(poses.size()*width*height, 0);
-
-    cudaMemcpy(&result_depth[0], depth_image_vec_float,
-                             poses.size()*width*height*sizeof(float), cudaMemcpyDeviceToHost);
-    cudaThreadSynchronize();
-
-    cudaFree(depth_image_vec_float);
-    cudaFree(depth_image_vec);
-    cudaFree(device_poses_ptr);
-    cudaFree(device_tris_ptr);
+    thrust::copy(device_depth_float.begin(), device_depth_float.end(), result_depth.begin());
 
     return result_depth;
 }

@@ -41,6 +41,8 @@ int main(int argc, char const *argv[])
 {
     const int width = 640; const int height = 480;
 
+    cuda_renderer::Model model(prefix+"models/obj_06.ply");
+
     Mat K = (Mat_<float>(3,3) << 572.4114, 0.0, 325.2611, 0.0, 573.57043, 242.04899, 0.0, 0.0, 1.0);
     auto proj = cuda_renderer::compute_proj(K, width, height);
 
@@ -51,9 +53,9 @@ int main(int argc, char const *argv[])
     cuda_renderer::Model::mat4x4 mat4;
     mat4.init_from_cv(R_ren, t_ren);
 
-    std::vector<cuda_renderer::Model::mat4x4> mat4_v(1, mat4);
-
-    cuda_renderer::Model model(prefix+"models/obj_06.ply");
+    std::vector<cuda_renderer::Model::mat4x4> mat4_v(100, mat4);
+    std::cout << "test render nums: " << mat4_v.size() << std::endl;
+    std::cout << "---------------------------------\n" << std::endl;
 
     {  // gpu need sometime to warm up. comment this will cost 5ms more
         auto result_gpu = cuda_renderer::render_cuda(model.tris, mat4_v, width, height, proj);
@@ -70,6 +72,8 @@ int main(int argc, char const *argv[])
     for(size_t i=0; i<result_cpu.size(); i++){
         result_diff[i] = std::abs(result_cpu[i] - result_gpu[i]);
     }
+
+    // just show first 1
     cv::Mat depth = cv::Mat(height, width, CV_32FC1, result_gpu.data());
     cv::Mat depth_diff = cv::Mat(height, width, CV_32FC1, result_diff.data());
 

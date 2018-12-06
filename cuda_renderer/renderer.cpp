@@ -41,15 +41,20 @@ void cuda_renderer::Model::LoadModel(const std::string &fileName)
         size_t guess_size = scene->mMeshes[scene->mRootNode->mMeshes[0]]->mNumVertices;
         vertices.reserve(guess_size);
     }
-
-
-
-
     recursive_render(scene, scene->mRootNode);
 
     get_bounding_box(bbox_min, bbox_max);
 
     aiReleaseImport(scene);
+
+    std::cout << "load model success    " <<                 std::endl;
+    std::cout << "face(triangles) nums: " << faces.size() << std::endl;
+    std::cout << "       vertices nums: " <<vertices.size()<<std::endl;
+
+    if(faces.size() > 10000)
+        std::cout << "you may want tools like meshlab to simplify models to speed up rendering" << std::endl;
+
+    std::cout << "------------------------------------\n" << std::endl;
 }
 
 cuda_renderer::Model::float3 cuda_renderer::Model::mat_mul_vec(const aiMatrix4x4 &mat, const aiVector3D &vec)
@@ -70,7 +75,7 @@ void cuda_renderer::Model::recursive_render(const aiScene *sc, const aiNode *nd,
 
         for (size_t t = 0; t < mesh->mNumFaces; ++t){
             const struct aiFace* face = &mesh->mFaces[t];
-            assert(face->mNumIndices == 3 && "we only render triangle");
+            assert(face->mNumIndices == 3 && "we only render triangle, use tools like meshlab to modify this models");
 
             Triangle tri_temp;
             tri_temp.v0 = mat_mul_vec(m, mesh->mVertices[face->mIndices[0]]);
@@ -142,8 +147,6 @@ void cuda_renderer::Model::get_bounding_box(aiVector3D& min, aiVector3D &max) co
     get_bounding_box_for_node(scene->mRootNode, min, max, &trafo);
 }
 
-
-// cpu renderer, for test
 std::vector<cuda_renderer::Model::mat4x4> cuda_renderer::mat_to_compact_4x4(const std::vector<cv::Mat> &poses)
 {
     std::vector<cuda_renderer::Model::mat4x4> mat4x4s(poses.size());
@@ -179,6 +182,9 @@ cuda_renderer::Model::mat4x4 cuda_renderer::compute_proj(const cv::Mat &K, int w
     return p;
 }
 
+
+
+// cpu renderer, for test
 static Model::float3 mat_mul_v(const Model::mat4x4& tran, const Model::float3& v){
     return {
         tran.a0*v.x + tran.a1*v.y + tran.a2*v.z + tran.a3,
