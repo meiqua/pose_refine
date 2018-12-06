@@ -113,7 +113,8 @@ __device__ float calculateSignedArea(float* A, float* B, float* C){
     return 0.5f*((C[0]-A[0])*(B[1]-A[1]) - (B[0]-A[0])*(C[1]-A[1]));
 }
 
-__device__ Model::float3 barycentric(float* A, float* B, float* C, float* P) {
+template<typename T>
+__device__ Model::float3 barycentric(float* A, float* B, float* C, T* P) {
 
     float float_P[2] = {float(P[0]), float(P[1])};
 
@@ -152,9 +153,9 @@ __device__ void rasterization(const Model::Triangle dev_tri, Model::float3 last_
         }
     }
 
-    float P[2];
-    for(P[1] = int(bboxmin[1]); P[1]<=bboxmax[1]; P[1] +=1.0f){
-        for(P[0] = int(bboxmin[0]); P[0]<=bboxmax[0]; P[0] +=1.0f){
+    size_t P[2];
+    for(P[1] = size_t(bboxmin[1]+0.5f); P[1]<=bboxmax[1]; P[1] += 1){
+        for(P[0] = size_t(bboxmin[0]+0.5f); P[0]<=bboxmax[0]; P[0] += 1){
             Model::float3 bc_screen  = barycentric(pts2[0], pts2[1], pts2[2], P);
 
             if (bc_screen.x<-0.0f || bc_screen.y<-0.0f || bc_screen.z<-0.0f ||
@@ -166,7 +167,7 @@ __device__ void rasterization(const Model::Triangle dev_tri, Model::float3 last_
             float frag_depth = -(dev_tri.v0.z*bc_over_z.x + dev_tri.v1.z*bc_over_z.y + dev_tri.v2.z*bc_over_z.z)
                     /(bc_over_z.x + bc_over_z.y + bc_over_z.z);
 
-            atomicMin(depth_entry + (width - int(P[0]+0.5f))+(height - int(P[1]+0.5f))*width, int(frag_depth/**1000*/ + 0.5f));
+            atomicMin(depth_entry + (width - P[0])+(height - P[1])*width, int(frag_depth/**1000*/ + 0.5f));
         }
     }
 }
@@ -210,8 +211,6 @@ std::vector<float> cuda_renderer::render_cuda(const std::vector<Model::Triangle>
 
     // atomic min only support int32
     thrust::device_vector<int32_t> device_depth_int(poses.size()*width*height, INT_MAX);
-//    thrust::device_vector<float> device_depth_float(poses.size()*width*height);
-
     {
         Model::Triangle* device_tris_ptr = thrust::raw_pointer_cast(device_tris.data());
         Model::mat4x4* device_poses_ptr = thrust::raw_pointer_cast(device_poses.data());
@@ -225,14 +224,20 @@ std::vector<float> cuda_renderer::render_cuda(const std::vector<Model::Triangle>
         gpuErrchk(cudaPeekAtLastError());
     }
 
-    // in place cast, save some space
-    thrust::transform(device_depth_int.begin(), device_depth_int.end(),
-                      device_depth_int.begin(), max2zero_functor());
-
     std::vector<float> result_depth(poses.size()*width*height);
-    thrust::copy(device_depth_int.begin(), device_depth_int.end(), result_depth.begin());
+    {   // int32 to float cast
+        thrust::device_vector<float> device_depth_float(poses.size()*width*height);
+        thrust::transform(device_depth_int.begin(), device_depth_int.end(),
+                          device_depth_float.begin(), max2zero_functor());
+        thrust::copy(device_depth_float.begin(), device_depth_float.end(), result_depth.begin());
+    }
+//    {   // in place cast, save some space, can we?
+//        thrust::transform(device_depth_int.begin(), device_depth_int.end(),
+//                          device_depth_int.begin(), max2zero_functor());
+//        thrust::copy(device_depth_int.begin(), device_depth_int.end(), result_depth.begin());
+//    }
 
-    print_cuda_memory_usage();
+//    print_cuda_memory_usage();
 
     return result_depth;
 }

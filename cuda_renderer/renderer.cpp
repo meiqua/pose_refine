@@ -205,7 +205,8 @@ static float calculateSignedArea(float* A, float* B, float* C){
     return 0.5f*((C[0]-A[0])*(B[1]-A[1]) - (B[0]-A[0])*(C[1]-A[1]));
 }
 
-static Model::float3 barycentric(float* A, float* B, float* C, float* P) {
+template<typename T>  // may be int float size_t atc
+static Model::float3 barycentric(float* A, float* B, float* C, T* P) {
 
     float float_P[2] = {float(P[0]), float(P[1])};
 
@@ -296,11 +297,11 @@ static void rasterization(const Model::Triangle& dev_tri, Model::float3& last_ro
         }
     }
 
-    float P[2];
+    size_t P[2];
 
-    // there will be small holes if +1; Model may be not so good?
-    for(P[1] = int(bboxmin[1]); P[1]<=bboxmax[1]; P[1] += 1.0f){
-        for(P[0] = int(bboxmin[0]); P[0]<=bboxmax[0]; P[0] += 1.0f){
+    // there will be small holes if +1; Model may be not so good?  ok, fixed already
+    for(P[1] = size_t(bboxmin[1]+0.5f); P[1]<=bboxmax[1]; P[1] += 1){
+        for(P[0] = size_t(bboxmin[0]+0.5f); P[0]<=bboxmax[0]; P[0] += 1){
 
             Model::float3 bc_screen  = barycentric(pts2[0], pts2[1], pts2[2], P);
 
@@ -327,7 +328,7 @@ static void rasterization(const Model::Triangle& dev_tri, Model::float3& last_ro
             float frag_depth = -(dev_tri.v0.z*bc_over_z.x + dev_tri.v1.z*bc_over_z.y + dev_tri.v2.z*bc_over_z.z)
                     /(bc_over_z.x + bc_over_z.y + bc_over_z.z);
 
-            auto& depth_to_write = depth_entry[(width - int(P[0]+0.5f))+(height - int(P[1]+0.5f))*width];
+            auto& depth_to_write = depth_entry[(width - P[0])+(height - P[1])*width];
             if(frag_depth < depth_to_write){
                 depth_to_write = frag_depth;
 
