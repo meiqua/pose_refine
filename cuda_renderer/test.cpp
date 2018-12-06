@@ -1,5 +1,9 @@
 #include "renderer.h"
 #include <chrono>
+
+#include <cuda.h>
+#include <cuda_runtime.h>
+#include <driver_functions.h>
 using namespace cv;
 
 static std::string prefix = "/home/meiqua/patch_linemod/public/datasets/hinterstoisser/";
@@ -57,8 +61,9 @@ int main(int argc, char const *argv[])
     std::cout << "test render nums: " << mat4_v.size() << std::endl;
     std::cout << "---------------------------------\n" << std::endl;
 
-    {  // gpu need sometime to warm up. comment this will cost 5ms more
-        auto result_gpu = cuda_renderer::render_cuda(model.tris, mat4_v, width, height, proj);
+    {  // gpu need sometime to warm up
+        cudaFree(0);
+//        cudaSetDevice(0);
     }
     helper::Timer timer;
 

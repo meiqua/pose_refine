@@ -19,6 +19,25 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=t
    }
 }
 
+void print_cuda_memory_usage(){
+    // show memory usage of GPU
+
+    size_t free_byte ;
+    size_t total_byte ;
+    auto cuda_status = cudaMemGetInfo( &free_byte, &total_byte ) ;
+
+    if ( cudaSuccess != cuda_status ){
+        printf("Error: cudaMemGetInfo fails, %s \n", cudaGetErrorString(cuda_status) );
+        exit(1);
+    }
+
+    double free_db = (double)free_byte ;
+    double total_db = (double)total_byte ;
+    double used_db = total_db - free_db ;
+    printf("GPU memory usage: used = %f, free = %f MB, total = %f MB\n",
+        used_db/1024.0/1024.0, free_db/1024.0/1024.0, total_db/1024.0/1024.0);
+}
+
 struct max2zero_functor{
 
     max2zero_functor(){}
@@ -191,7 +210,7 @@ std::vector<float> cuda_renderer::render_cuda(const std::vector<Model::Triangle>
 
     // atomic min only support int32
     thrust::device_vector<int32_t> device_depth_int(poses.size()*width*height, INT_MAX);
-    thrust::device_vector<float> device_depth_float(poses.size()*width*height);
+//    thrust::device_vector<float> device_depth_float(poses.size()*width*height);
 
     {
         Model::Triangle* device_tris_ptr = thrust::raw_pointer_cast(device_tris.data());
@@ -206,11 +225,14 @@ std::vector<float> cuda_renderer::render_cuda(const std::vector<Model::Triangle>
         gpuErrchk(cudaPeekAtLastError());
     }
 
+    // in place cast, save some space
     thrust::transform(device_depth_int.begin(), device_depth_int.end(),
-                      device_depth_float.begin(), max2zero_functor());
+                      device_depth_int.begin(), max2zero_functor());
 
-    std::vector<float> result_depth(poses.size()*width*height, 0);
-    thrust::copy(device_depth_float.begin(), device_depth_float.end(), result_depth.begin());
+    std::vector<float> result_depth(poses.size()*width*height);
+    thrust::copy(device_depth_int.begin(), device_depth_int.end(), result_depth.begin());
+
+    print_cuda_memory_usage();
 
     return result_depth;
 }

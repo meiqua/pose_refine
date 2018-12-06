@@ -33,8 +33,8 @@ add_library(cuda_renderer
                ${renderer_cuda} 
                ${renderer_cuda_objs} 
 )
-target_include_directories(cuda_renderer PRIVATE ${renderer_inc})
-target_link_libraries(cuda_renderer PRIVATE ${renderer_lib})
+target_include_directories(cuda_renderer PUBLIC ${renderer_inc})
+target_link_libraries(cuda_renderer PUBLIC ${renderer_lib})
 
 
 add_executable(renderer_test test.cpp)
