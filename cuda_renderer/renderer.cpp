@@ -183,86 +183,11 @@ cuda_renderer::Model::mat4x4 cuda_renderer::compute_proj(const cv::Mat &K, int w
 }
 
 
-
 // cpu renderer, for test
-static Model::float3 mat_mul_v(const Model::mat4x4& tran, const Model::float3& v){
-    return {
-        tran.a0*v.x + tran.a1*v.y + tran.a2*v.z + tran.a3,
-        tran.b0*v.x + tran.b1*v.y + tran.b2*v.z + tran.b3,
-        tran.c0*v.x + tran.c1*v.y + tran.c2*v.z + tran.c3,
-    };
-}
 
-static Model::Triangle transform_triangle(const Model::Triangle& dev_tri, const Model::mat4x4& tran){
-    return {
-        mat_mul_v(tran, (dev_tri.v0)),
-        mat_mul_v(tran, (dev_tri.v1)),
-        mat_mul_v(tran, (dev_tri.v2)),
-    };
-}
-
-static float calculateSignedArea(float* A, float* B, float* C){
-    return 0.5f*((C[0]-A[0])*(B[1]-A[1]) - (B[0]-A[0])*(C[1]-A[1]));
-}
-
-template<typename T>  // may be int float size_t atc
-static Model::float3 barycentric(float* A, float* B, float* C, T* P) {
-
-    float float_P[2] = {float(P[0]), float(P[1])};
-
-    float base_inv = 1/calculateSignedArea(A, B, C);
-    float beta = calculateSignedArea(A, float_P, C)*base_inv;
-    float gamma = calculateSignedArea(A, B, float_P)*base_inv;
-
-    return {
-        1.0f-beta-gamma,
-        beta,
-        gamma,
-    };
-}
-
-namespace normal_functor{
-
-static    Model::float3 minus(const Model::float3& one, const Model::float3& the_other)
-    {
-        return {
-            one.x - the_other.x,
-            one.y - the_other.y,
-            one.z - the_other.z
-        };
-    }
-
-static    Model::float3 cross(const Model::float3& one, const Model::float3& the_other)
-    {
-        return {
-            one.y*the_other.z - one.z*the_other.y,
-            one.z*the_other.x - one.x*the_other.z,
-            one.x*the_other.y - one.y*the_other.x
-        };
-    }
-
-static    Model::float3 normalized(const Model::float3& one)
-    {
-        float norm = std::sqrt(one.x*one.x+one.y*one.y+one.z*one.z);
-        return {
-          one.x/norm,
-          one.y/norm,
-          one.z/norm
-        };
-    }
-
-static    Model::float3 get_normal(const Model::Triangle& dev_tri)
-    {
-//      return normalized(cross(minus(dev_tri.v1, dev_tri.v0), minus(dev_tri.v1, dev_tri.v0)));
-
-      // no need for normalizing?
-      return (cross(minus(dev_tri.v1, dev_tri.v0), minus(dev_tri.v2, dev_tri.v0)));
-    }
-};
-
-static void rasterization(const Model::Triangle& dev_tri, Model::float3& last_row,
-                                        float* depth_entry, size_t width, size_t height){
-//    cv::Mat depth = cv::Mat(height, width, CV_32FC1, depth_entry);
+// slightly different from device one, use no atomicMin
+void rasterization(const Model::Triangle dev_tri, Model::float3 last_row,
+                                        int32_t* depth_entry, size_t width, size_t height){
     // refer to tiny renderer
     // https://github.com/ssloy/tinyrenderer/blob/master/our_gl.cpp
     float pts2[3][2];
@@ -272,55 +197,23 @@ static void rasterization(const Model::Triangle& dev_tri, Model::float3& last_ro
     pts2[1][0] = dev_tri.v1.x/last_row.y*width/2.0f+width/2.0f; pts2[1][1] = dev_tri.v1.y/last_row.y*height/2.0f+height/2.0f;
     pts2[2][0] = dev_tri.v2.x/last_row.z*width/2.0f+width/2.0f; pts2[2][1] = dev_tri.v2.y/last_row.z*height/2.0f+height/2.0f;
 
-//    std::cout << "\n------------------------------" << std::endl;
-//    std::cout << last_row << std::endl;
-//    std::cout << dev_tri << std::endl;
-
-//    std::cout << pts2[0][0] << "\t" << pts2[0][1] << std::endl;
-//    std::cout << pts2[1][0] << "\t" << pts2[1][1] << std::endl;
-//    std::cout << pts2[2][0] << "\t" << pts2[2][1] << std::endl;
-//    std::cout << "------------------------------\n" << std::endl;
-
-    // for test
-//    Model::Triangle local_tri;
-//    local_tri.v0.x = pts2[0][0]; local_tri.v0.y = pts2[0][1]; local_tri.v0.z = 0;
-//    local_tri.v1.x = pts2[1][0]; local_tri.v1.y = pts2[1][1]; local_tri.v1.z = 0;
-//    local_tri.v2.x = pts2[2][0]; local_tri.v2.y = pts2[2][1]; local_tri.v2.z = 0;
-
     float bboxmin[2] = {FLT_MAX,  FLT_MAX};
     float bboxmax[2] = {-FLT_MAX, -FLT_MAX};
     float clamp[2] = {float(width-1), float(height-1)};
     for (int i=0; i<3; i++) {
         for (int j=0; j<2; j++) {
-            bboxmin[j] = std::max(0.f,      std::min(bboxmin[j], pts2[i][j]));
-            bboxmax[j] = std::min(clamp[j], std::max(bboxmax[j], pts2[i][j]));
+            bboxmin[j] = std__max(0.f,      std__min(bboxmin[j], pts2[i][j]));
+            bboxmax[j] = std__min(clamp[j], std__max(bboxmax[j], pts2[i][j]));
         }
     }
 
     size_t P[2];
-
-    // there will be small holes if +1; Model may be not so good?  ok, fixed already
     for(P[1] = size_t(bboxmin[1]+0.5f); P[1]<=bboxmax[1]; P[1] += 1){
         for(P[0] = size_t(bboxmin[0]+0.5f); P[0]<=bboxmax[0]; P[0] += 1){
-
             Model::float3 bc_screen  = barycentric(pts2[0], pts2[1], pts2[2], P);
 
-//            const bool test_whitch = P[0]==(640-361) && P[1]==(480-121);
-//            if(test_whitch){
-//                std::cout << "\nbarycentric:" << std::endl;
-//                std::cout << bc_screen;
-//                std::cout << "\ntriangle:" << std::endl;
-//                std::cout << local_tri;
-//                std::cout << "--------------" << std::endl;
-//            }
-
-            // out of triangle
             if (bc_screen.x<-0.0f || bc_screen.y<-0.0f || bc_screen.z<-0.0f ||
                     bc_screen.x>1.0f || bc_screen.y>1.0f || bc_screen.z>1.0f ) continue;
-
-//            if(test_whitch){
-//                std::cerr << "can't be here" << std::endl;
-//            }
 
             Model::float3 bc_over_z = {bc_screen.x/last_row.x, bc_screen.y/last_row.y, bc_screen.z/last_row.z};
 
@@ -328,32 +221,29 @@ static void rasterization(const Model::Triangle& dev_tri, Model::float3& last_ro
             float frag_depth = -(dev_tri.v0.z*bc_over_z.x + dev_tri.v1.z*bc_over_z.y + dev_tri.v2.z*bc_over_z.z)
                     /(bc_over_z.x + bc_over_z.y + bc_over_z.z);
 
-            auto& depth_to_write = depth_entry[(width - P[0])+(height - P[1])*width];
-            if(frag_depth < depth_to_write){
-                depth_to_write = frag_depth;
+            int32_t depth = int32_t(frag_depth/**1000*/ + 0.5f);
+            int32_t& depth_to_write = depth_entry[(width - P[0])+(height - P[1])*width];
 
-//                cv::imshow("test", depth != FLT_MAX);
-//                cv::waitKey(0);
-            }
+            if(depth < depth_to_write)
+            depth_entry[(width - P[0])+(height - P[1])*width] = depth;
         }
     }
-
-//    cv::imshow("test", depth != FLT_MAX);
-//    cv::waitKey(0);
 }
 
-std::vector<float> cuda_renderer::render_cpu(const std::vector<cuda_renderer::Model::Triangle> &tris,
+std::vector<int32_t> cuda_renderer::render_cpu(const std::vector<cuda_renderer::Model::Triangle> &tris,
                                            const std::vector<cuda_renderer::Model::mat4x4> &poses,
                                            size_t width, size_t height, const cuda_renderer::Model::mat4x4 &proj_mat)
 {
-    std::vector<float> depth(poses.size()*width*height, FLT_MAX);
+    std::vector<int32_t> depth(poses.size()*width*height, INT_MAX);
 
-    size_t i = 0;
-    for(const auto& pose: poses){
+#pragma omp parallel for
+    for(size_t i=0; i<poses.size(); i++){
+
+        const auto& pose = poses[i];
         for(const auto& tri: tris){
             // model transform
             Model::Triangle local_tri = transform_triangle(tri, pose);
-//            if(normal_functor::get_normal(local_tri).z < 0) continue;
+//            if(normal_functor::is_back(local_tri)) continue;
 
             // assume last column of projection matrix is  0 0 -1 0
             Model::float3 last_row = {
@@ -365,11 +255,10 @@ std::vector<float> cuda_renderer::render_cpu(const std::vector<cuda_renderer::Mo
             local_tri = transform_triangle(local_tri, proj_mat);
             rasterization(local_tri, last_row, depth.data()+i*width*height, width, height);
         }
-        i++;
     }
 
     for(auto& d: depth){
-        if(d==FLT_MAX) d=0;
+        if(d==INT_MAX) d=0;
     }
 
     return depth;

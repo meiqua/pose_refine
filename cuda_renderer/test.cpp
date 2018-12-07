@@ -67,22 +67,30 @@ int main(int argc, char const *argv[])
     }
     helper::Timer timer;
 
-    auto result_cpu = cuda_renderer::render_cpu(model.tris, mat4_v, width, height, proj);
+    std::vector<int> result_cpu = cuda_renderer::render_cpu(model.tris, mat4_v, width, height, proj);
     timer.out("cpu render");
 
-    auto result_gpu = cuda_renderer::render_cuda(model.tris, mat4_v, width, height, proj);
+    std::vector<int> result_gpu = cuda_renderer::render_cuda(model.tris, mat4_v, width, height, proj);
     timer.out("gpu render");
 
-    std::vector<float> result_diff(result_cpu.size());
+    thrust::device_vector<int> result_gpu_keep_in =
+            cuda_renderer::render_cuda_keep_in_gpu(model.tris, mat4_v, width, height, proj);
+    timer.out("gpu_keep_in render");
+
+    std::vector<int> depth_int32(result_gpu_keep_in.size());
+    thrust::copy(result_gpu_keep_in.begin(), result_gpu_keep_in.end(), depth_int32.begin());
+    timer.out("gpu_keep_in back to host");
+
+    std::vector<int> result_diff(result_cpu.size());
     for(size_t i=0; i<result_cpu.size(); i++){
         result_diff[i] = std::abs(result_cpu[i] - result_gpu[i]);
     }
+    assert(std::accumulate(result_diff.begin(), result_diff.end(), 0) == 0 &&
+           "rendering results, cpu should be same as gpu");
 
     // just show first 1
-    cv::Mat depth = cv::Mat(height, width, CV_32FC1, result_gpu.data());
-    cv::Mat depth_diff = cv::Mat(height, width, CV_32FC1, result_diff.data());
+    cv::Mat depth = cv::Mat(height, width, CV_32SC1, result_cpu.data());
 
-    cv::imshow("gpu_cpu_diff", depth_diff>1); //int32 to float may have 1 diff
     cv::imshow("gpu_mask", depth>0);
     cv::imshow("gpu_depth", helper::view_dep(depth));
     cv::waitKey(0);

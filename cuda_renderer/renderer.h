@@ -1,5 +1,10 @@
 #pragma once
 
+// cuda
+#include <thrust/host_vector.h>
+#include <thrust/device_vector.h>
+#include <thrust/copy.h>
+
 // load ply
 #include <assimp/cimport.h>
 #include <assimp/scene.h>
@@ -115,9 +120,48 @@ public:
 std::vector<Model::mat4x4> mat_to_compact_4x4(const std::vector<cv::Mat>& poses);
 Model::mat4x4 compute_proj(const cv::Mat& K, int width, int height, float near=10, float far=10000);
 
-std::vector<float> render_cuda(const std::vector<Model::Triangle>& tris,const std::vector<Model::mat4x4>& poses,
+std::vector<int32_t> render_cuda(const std::vector<Model::Triangle>& tris,const std::vector<Model::mat4x4>& poses,
                             size_t width, size_t height, const Model::mat4x4& proj_mat);
 
-std::vector<float> render_cpu(const std::vector<Model::Triangle>& tris,const std::vector<Model::mat4x4>& poses,
+std::vector<int32_t> render_cpu(const std::vector<Model::Triangle>& tris,const std::vector<Model::mat4x4>& poses,
                             size_t width, size_t height, const Model::mat4x4& proj_mat);
+
+thrust::device_vector<int32_t> render_cuda_keep_in_gpu(const std::vector<Model::Triangle>& tris,const std::vector<Model::mat4x4>& poses,
+                            size_t width, size_t height, const Model::mat4x4& proj_mat);
+
+
+//low_level
+namespace normal_functor{
+    __host__ __device__
+    Model::float3 minus(const Model::float3& one, const Model::float3& the_other);
+
+    __host__ __device__
+    Model::float3 cross(const Model::float3& one, const Model::float3& the_other);
+
+    __host__ __device__
+    Model::float3 normalized(const Model::float3& one);
+
+    __host__ __device__
+    Model::float3 get_normal(const Model::Triangle& dev_tri);
+
+    __host__ __device__
+    bool is_back(const Model::Triangle& dev_tri);
+};
+
+__host__ __device__
+Model::float3 mat_mul_v(const Model::mat4x4& tran, const Model::float3& v);
+
+__host__ __device__
+Model::Triangle transform_triangle(const Model::Triangle& dev_tri, const Model::mat4x4& tran);
+
+__host__ __device__
+float calculateSignedArea(float* A, float* B, float* C);
+
+__host__ __device__
+Model::float3 barycentric(float* A, float* B, float* C, size_t* P);
+
+__host__ __device__ inline
+float std__max(float a, float b){return (a>b)? a: b;};
+__host__ __device__ inline
+float std__min(float a, float b){return (a<b)? a: b;};
 }
