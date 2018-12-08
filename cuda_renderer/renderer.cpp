@@ -187,7 +187,7 @@ cuda_renderer::Model::mat4x4 cuda_renderer::compute_proj(const cv::Mat &K, int w
 
 // slightly different from device one, use no atomicMin
 void rasterization(const Model::Triangle dev_tri, Model::float3 last_row,
-                                        int32_t* depth_entry, size_t width, size_t height){
+                                        int32_t* depth_entry, size_t width, size_t height, const Model::ROI roi){
     // refer to tiny renderer
     // https://github.com/ssloy/tinyrenderer/blob/master/our_gl.cpp
     float pts2[3][2];
@@ -199,11 +199,24 @@ void rasterization(const Model::Triangle dev_tri, Model::float3 last_row,
 
     float bboxmin[2] = {FLT_MAX,  FLT_MAX};
     float bboxmax[2] = {-FLT_MAX, -FLT_MAX};
-    float clamp[2] = {float(width-1), float(height-1)};
+
+    float clamp_max[2] = {float(width-1), float(height-1)};
+    float clamp_min[2] = {0, 0};
+
+    size_t real_width = width;
+    if(roi.width > 0 && roi.height > 0){  // depth will be flipped
+        clamp_min[0] = width - (roi.x + roi.width) + 1; // +1 avoid out of roi
+        clamp_min[1] = height - (roi.y + roi.height) + 1;
+        clamp_max[0] = width - roi.x;
+        clamp_max[1] = height - roi.y;
+        real_width = roi.width;
+    }
+
+
     for (int i=0; i<3; i++) {
         for (int j=0; j<2; j++) {
-            bboxmin[j] = std__max(0.f,      std__min(bboxmin[j], pts2[i][j]));
-            bboxmax[j] = std__min(clamp[j], std__max(bboxmax[j], pts2[i][j]));
+            bboxmin[j] = std__max(clamp_min[j], std__min(bboxmin[j], pts2[i][j]));
+            bboxmax[j] = std__min(clamp_max[j], std__max(bboxmax[j], pts2[i][j]));
         }
     }
 
@@ -221,20 +234,30 @@ void rasterization(const Model::Triangle dev_tri, Model::float3 last_row,
             float frag_depth = -(dev_tri.v0.z*bc_over_z.x + dev_tri.v1.z*bc_over_z.y + dev_tri.v2.z*bc_over_z.z)
                     /(bc_over_z.x + bc_over_z.y + bc_over_z.z);
 
+            size_t x_to_write = (width - P[0] - roi.x);
+            size_t y_to_write = (height - P[1] - roi.y);
+
             int32_t depth = int32_t(frag_depth/**1000*/ + 0.5f);
-            int32_t& depth_to_write = depth_entry[(width - P[0])+(height - P[1])*width];
+            int32_t& depth_to_write = depth_entry[x_to_write+y_to_write*real_width];
 
             if(depth < depth_to_write)
-            depth_entry[(width - P[0])+(height - P[1])*width] = depth;
+            depth_to_write = depth;
         }
     }
 }
 
 std::vector<int32_t> cuda_renderer::render_cpu(const std::vector<cuda_renderer::Model::Triangle> &tris,
                                            const std::vector<cuda_renderer::Model::mat4x4> &poses,
-                                           size_t width, size_t height, const cuda_renderer::Model::mat4x4 &proj_mat)
+                                           size_t width, size_t height, const cuda_renderer::Model::mat4x4 &proj_mat,
+                                               const Model::ROI roi)
 {
-    std::vector<int32_t> depth(poses.size()*width*height, INT_MAX);
+    size_t real_width = width;
+    size_t real_height = height;
+    if(roi.width > 0 && roi.height > 0){
+        real_width = roi.width;
+        real_height = roi.height;
+    }
+    std::vector<int32_t> depth(poses.size()*real_width*real_height, INT_MAX);
 
 #pragma omp parallel for
     for(size_t i=0; i<poses.size(); i++){
@@ -253,7 +276,7 @@ std::vector<int32_t> cuda_renderer::render_cpu(const std::vector<cuda_renderer::
             };
             // projection transform
             local_tri = transform_triangle(local_tri, proj_mat);
-            rasterization(local_tri, last_row, depth.data()+i*width*height, width, height);
+            rasterization(local_tri, last_row, depth.data()+i*real_width*real_height, width, height, roi);
         }
     }
 

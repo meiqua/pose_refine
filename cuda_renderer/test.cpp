@@ -67,33 +67,90 @@ int main(int argc, char const *argv[])
     }
     helper::Timer timer;
 
-    std::vector<int> result_cpu = cuda_renderer::render_cpu(model.tris, mat4_v, width, height, proj);
-    timer.out("cpu render");
+    if(true){   //render test
+        std::cout << "\nrendering test" << std::endl;
+        std::cout << "-----------------------\n" << std::endl;
+        timer.reset();
 
-    std::vector<int> result_gpu = cuda_renderer::render_cuda(model.tris, mat4_v, width, height, proj);
-    timer.out("gpu render");
+        std::vector<int> result_cpu = cuda_renderer::render_cpu(model.tris, mat4_v, width, height, proj);
+        timer.out("cpu render");
 
-    thrust::device_vector<int> result_gpu_keep_in =
-            cuda_renderer::render_cuda_keep_in_gpu(model.tris, mat4_v, width, height, proj);
-    timer.out("gpu_keep_in render");
+        std::vector<int> result_gpu = cuda_renderer::render_cuda(model.tris, mat4_v, width, height, proj);
+        timer.out("gpu render");
 
-    std::vector<int> depth_int32(result_gpu_keep_in.size());
-    thrust::copy(result_gpu_keep_in.begin(), result_gpu_keep_in.end(), depth_int32.begin());
-    timer.out("gpu_keep_in back to host");
+        thrust::device_vector<int> result_gpu_keep_in =
+                cuda_renderer::render_cuda_keep_in_gpu(model.tris, mat4_v, width, height, proj);
+        timer.out("gpu_keep_in render");
 
-    std::vector<int> result_diff(result_cpu.size());
-    for(size_t i=0; i<result_cpu.size(); i++){
-        result_diff[i] = std::abs(result_cpu[i] - result_gpu[i]);
+        std::vector<int> result_gpu_back_to_host(result_gpu_keep_in.size());
+        thrust::copy(result_gpu_keep_in.begin(), result_gpu_keep_in.end(), result_gpu_back_to_host.begin());
+        timer.out("gpu_keep_in back to host");
+
+        // gpu cpu check
+        std::vector<int> result_diff(result_cpu.size());
+        for(size_t i=0; i<result_cpu.size(); i++){
+            result_diff[i] = std::abs(result_cpu[i] - result_gpu[i]);
+        }
+        assert(std::accumulate(result_diff.begin(), result_diff.end(), 0) == 0 &&
+               "rendering results, cpu should be same as gpu");
+
+        //gpu cpu_keep_in_check
+        for(size_t i=0; i<result_gpu_back_to_host.size(); i++){
+            result_diff[i] = std::abs(result_gpu_back_to_host[i] - result_gpu[i]);
+        }
+        assert(std::accumulate(result_diff.begin(), result_diff.end(), 0) == 0 &&
+               "rendering results, gpu keep in should be same as gpu");
+
+        // just show first 1
+        cv::Mat depth = cv::Mat(height, width, CV_32SC1, result_gpu.data());
+
+        cv::imshow("gpu_mask", depth>0);
+        cv::imshow("gpu_depth", helper::view_dep(depth));
+        cv::waitKey(0);
     }
-    assert(std::accumulate(result_diff.begin(), result_diff.end(), 0) == 0 &&
-           "rendering results, cpu should be same as gpu");
 
-    // just show first 1
-    cv::Mat depth = cv::Mat(height, width, CV_32SC1, result_cpu.data());
+    if(true){   //roi render test
+        std::cout << "\nroi test" << std::endl;
+        std::cout << "-----------------------\n" << std::endl;
+        timer.reset();
 
-    cv::imshow("gpu_mask", depth>0);
-    cv::imshow("gpu_depth", helper::view_dep(depth));
-    cv::waitKey(0);
+        //roi: topleft x, y, width, height
+        cuda_renderer::Model::ROI roi = {160, 80, 320, 240};
+
+        std::vector<int> result_cpu = cuda_renderer::render_cpu(model.tris, mat4_v, width, height, proj, roi);
+        timer.out("cpu roi render");
+
+        std::vector<int> result_gpu = cuda_renderer::render_cuda(model.tris, mat4_v, width, height, proj, roi);
+        timer.out("gpu roi render");
+
+        thrust::device_vector<int> result_gpu_keep_in =
+                cuda_renderer::render_cuda_keep_in_gpu(model.tris, mat4_v, width, height, proj, roi);
+        timer.out("gpu_keep_in roi render");
+
+        std::vector<int> result_gpu_back_to_host(result_gpu_keep_in.size());
+        thrust::copy(result_gpu_keep_in.begin(), result_gpu_keep_in.end(), result_gpu_back_to_host.begin());
+        timer.out("gpu_keep_in roi back to host");
+
+        std::vector<int> result_diff(result_cpu.size());
+        for(size_t i=0; i<result_cpu.size(); i++){
+            result_diff[i] = std::abs(result_cpu[i] - result_gpu[i]);
+        }
+        assert(std::accumulate(result_diff.begin(), result_diff.end(), 0) == 0 &&
+               "rendering results, cpu should be same as gpu");
+
+        for(size_t i=0; i<result_cpu.size(); i++){
+            result_diff[i] = std::abs(result_gpu_back_to_host[i] - result_gpu[i]);
+        }
+        assert(std::accumulate(result_diff.begin(), result_diff.end(), 0) == 0 &&
+               "rendering results, gpu keep in should be same as gpu");
+
+        // just show first 1
+        cv::Mat depth = cv::Mat(roi.height, roi.width, CV_32SC1, result_cpu.data());
+
+        cv::imshow("gpu_mask_roi", depth>0);
+        cv::imshow("gpu_depth_roi", helper::view_dep(depth));
+        cv::waitKey(0);
+    }
 
     return 0;
 }

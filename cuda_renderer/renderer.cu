@@ -128,7 +128,7 @@ struct max2zero_functor{
 
 __device__
 void rasterization(const Model::Triangle dev_tri, Model::float3 last_row,
-                                        int32_t* depth_entry, size_t width, size_t height){
+                                        int32_t* depth_entry, size_t width, size_t height, const Model::ROI roi){
     // refer to tiny renderer
     // https://github.com/ssloy/tinyrenderer/blob/master/our_gl.cpp
     float pts2[3][2];
@@ -140,11 +140,24 @@ void rasterization(const Model::Triangle dev_tri, Model::float3 last_row,
 
     float bboxmin[2] = {FLT_MAX,  FLT_MAX};
     float bboxmax[2] = {-FLT_MAX, -FLT_MAX};
-    float clamp[2] = {float(width-1), float(height-1)};
+
+    float clamp_max[2] = {float(width-1), float(height-1)};
+    float clamp_min[2] = {0, 0};
+
+    size_t real_width = width;
+    if(roi.width > 0 && roi.height > 0){  // depth will be flipped
+        clamp_min[0] = width - (roi.x + roi.width) + 1; // +1 avoid out of roi
+        clamp_min[1] = height - (roi.y + roi.height) + 1;
+        clamp_max[0] = width - roi.x;
+        clamp_max[1] = height - roi.y;
+        real_width = roi.width;
+    }
+
+
     for (int i=0; i<3; i++) {
         for (int j=0; j<2; j++) {
-            bboxmin[j] = std__max(0.f,      std__min(bboxmin[j], pts2[i][j]));
-            bboxmax[j] = std__min(clamp[j], std__max(bboxmax[j], pts2[i][j]));
+            bboxmin[j] = std__max(clamp_min[j], std__min(bboxmin[j], pts2[i][j]));
+            bboxmax[j] = std__min(clamp_max[j], std__max(bboxmax[j], pts2[i][j]));
         }
     }
 
@@ -162,21 +175,35 @@ void rasterization(const Model::Triangle dev_tri, Model::float3 last_row,
             float frag_depth = -(dev_tri.v0.z*bc_over_z.x + dev_tri.v1.z*bc_over_z.y + dev_tri.v2.z*bc_over_z.z)
                     /(bc_over_z.x + bc_over_z.y + bc_over_z.z);
 
-            atomicMin(depth_entry + (width - P[0])+(height - P[1])*width, int(frag_depth/**1000*/ + 0.5f));
+            size_t x_to_write = (width - P[0] - roi.x);
+            size_t y_to_write = (height - P[1] - roi.y);
+
+            int32_t depth = int32_t(frag_depth/**1000*/ + 0.5f);
+            int32_t& depth_to_write = depth_entry[x_to_write+y_to_write*real_width];
+
+            atomicMin(&depth_to_write, depth);
         }
     }
 }
 
 __global__ void render_triangle(Model::Triangle* device_tris_ptr, size_t device_tris_size,
                                 Model::mat4x4* device_poses_ptr, size_t device_poses_size,
-                                int32_t* depth_image_vec, size_t width, size_t height, const Model::mat4x4 proj_mat){
+                                int32_t* depth_image_vec, size_t width, size_t height, const Model::mat4x4 proj_mat,
+                                 const Model::ROI roi){
     size_t pose_i = blockIdx.y;
     size_t tri_i = blockIdx.x*blockDim.x + threadIdx.x;
 
     if(tri_i>=device_tris_size) return;
 //    if(pose_i>=device_poses_size) return;
 
-    int32_t* depth_entry = depth_image_vec + pose_i*width*height; //length: width*height 32bits int
+    size_t real_width = width;
+    size_t real_height = height;
+    if(roi.width > 0 && roi.height > 0){
+        real_width = roi.width;
+        real_height = roi.height;
+    }
+
+    int32_t* depth_entry = depth_image_vec + pose_i*real_width*real_height; //length: width*height 32bits int
     Model::mat4x4* pose_entry = device_poses_ptr + pose_i; // length: 16 32bits float
     Model::Triangle* tri_entry = device_tris_ptr + tri_i; // length: 9 32bits float
 
@@ -193,19 +220,27 @@ __global__ void render_triangle(Model::Triangle* device_tris_ptr, size_t device_
     // projection transform
     local_tri = transform_triangle(local_tri, proj_mat);
 
-    rasterization(local_tri, last_row, depth_entry, width, height);
+    rasterization(local_tri, last_row, depth_entry, width, height, roi);
 }
 
 std::vector<int32_t> render_cuda(const std::vector<Model::Triangle>& tris,const std::vector<Model::mat4x4>& poses,
-                            size_t width, size_t height, const Model::mat4x4& proj_mat){
+                            size_t width, size_t height, const Model::mat4x4& proj_mat, const Model::ROI roi){
 
     const size_t threadsPerBlock = 256;
 
     thrust::device_vector<Model::Triangle> device_tris = tris;
     thrust::device_vector<Model::mat4x4> device_poses = poses;
 
+    size_t real_width = width;
+    size_t real_height = height;
+    if(roi.width > 0 && roi.height > 0){
+        real_width = roi.width;
+        real_height = roi.height;
+        assert(roi.x + roi.width <= width && "roi out of image");
+        assert(roi.y + roi.height <= height && "roi out of image");
+    }
     // atomic min only support int32
-    thrust::device_vector<int32_t> device_depth_int(poses.size()*width*height, INT_MAX);
+    thrust::device_vector<int32_t> device_depth_int(poses.size()*real_width*real_height, INT_MAX);
     {
         Model::Triangle* device_tris_ptr = thrust::raw_pointer_cast(device_tris.data());
         Model::mat4x4* device_poses_ptr = thrust::raw_pointer_cast(device_poses.data());
@@ -214,12 +249,12 @@ std::vector<int32_t> render_cuda(const std::vector<Model::Triangle>& tris,const 
         dim3 numBlocks((tris.size() + threadsPerBlock - 1) / threadsPerBlock, poses.size());
         render_triangle<<<numBlocks, threadsPerBlock>>>(device_tris_ptr, tris.size(),
                                                         device_poses_ptr, poses.size(),
-                                                        depth_image_vec, width, height, proj_mat);
+                                                        depth_image_vec, width, height, proj_mat, roi);
         cudaThreadSynchronize();
         gpuErrchk(cudaPeekAtLastError());
     }
 
-    std::vector<int32_t> result_depth(poses.size()*width*height);
+    std::vector<int32_t> result_depth(poses.size()*real_width*real_height);
     {
         thrust::transform(device_depth_int.begin(), device_depth_int.end(),
                           device_depth_int.begin(), max2zero_functor());
@@ -230,15 +265,21 @@ std::vector<int32_t> render_cuda(const std::vector<Model::Triangle>& tris,const 
 }
 
 thrust::device_vector<int32_t> render_cuda_keep_in_gpu(const std::vector<Model::Triangle>& tris,const std::vector<Model::mat4x4>& poses,
-                            size_t width, size_t height, const Model::mat4x4& proj_mat){
+                            size_t width, size_t height, const Model::mat4x4& proj_mat, const Model::ROI roi){
 
     const size_t threadsPerBlock = 256;
 
     thrust::device_vector<Model::Triangle> device_tris = tris;
     thrust::device_vector<Model::mat4x4> device_poses = poses;
 
+    size_t real_width = width;
+    size_t real_height = height;
+    if(roi.width > 0 && roi.height > 0){
+        real_width = roi.width;
+        real_height = roi.height;
+    }
     // atomic min only support int32
-    thrust::device_vector<int32_t> device_depth_int(poses.size()*width*height, INT_MAX);
+    thrust::device_vector<int32_t> device_depth_int(poses.size()*real_width*real_height, INT_MAX);
     {
         Model::Triangle* device_tris_ptr = thrust::raw_pointer_cast(device_tris.data());
         Model::mat4x4* device_poses_ptr = thrust::raw_pointer_cast(device_poses.data());
@@ -247,7 +288,7 @@ thrust::device_vector<int32_t> render_cuda_keep_in_gpu(const std::vector<Model::
         dim3 numBlocks((tris.size() + threadsPerBlock - 1) / threadsPerBlock, poses.size());
         render_triangle<<<numBlocks, threadsPerBlock>>>(device_tris_ptr, tris.size(),
                                                         device_poses_ptr, poses.size(),
-                                                        depth_image_vec, width, height, proj_mat);
+                                                        depth_image_vec, width, height, proj_mat, roi);
         cudaThreadSynchronize();
         gpuErrchk(cudaPeekAtLastError());
     }

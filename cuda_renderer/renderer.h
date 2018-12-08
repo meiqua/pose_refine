@@ -32,6 +32,13 @@ public:
         size_t v2;
     };
 
+    struct ROI{
+        size_t x;
+        size_t y;
+        size_t width;
+        size_t height;
+    };
+
     struct float3{
         float x;
         float y;
@@ -120,14 +127,19 @@ public:
 std::vector<Model::mat4x4> mat_to_compact_4x4(const std::vector<cv::Mat>& poses);
 Model::mat4x4 compute_proj(const cv::Mat& K, int width, int height, float near=10, float far=10000);
 
+
+//roi: directly crop while rendering, expected to save much time & space
 std::vector<int32_t> render_cuda(const std::vector<Model::Triangle>& tris,const std::vector<Model::mat4x4>& poses,
-                            size_t width, size_t height, const Model::mat4x4& proj_mat);
+                            size_t width, size_t height, const Model::mat4x4& proj_mat,
+                                 const Model::ROI roi= {0, 0, 0, 0});
 
 std::vector<int32_t> render_cpu(const std::vector<Model::Triangle>& tris,const std::vector<Model::mat4x4>& poses,
-                            size_t width, size_t height, const Model::mat4x4& proj_mat);
+                            size_t width, size_t height, const Model::mat4x4& proj_mat,
+                                const Model::ROI roi= {0, 0, 0, 0});
 
 thrust::device_vector<int32_t> render_cuda_keep_in_gpu(const std::vector<Model::Triangle>& tris,const std::vector<Model::mat4x4>& poses,
-                            size_t width, size_t height, const Model::mat4x4& proj_mat);
+                            size_t width, size_t height, const Model::mat4x4& proj_mat,
+                                                       const Model::ROI roi= {0, 0, 0, 0});
 
 
 //low_level
