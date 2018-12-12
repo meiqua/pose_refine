@@ -94,7 +94,7 @@ int main(int argc, char const *argv[])
         assert(std::accumulate(result_diff.begin(), result_diff.end(), 0) == 0 &&
                "rendering results, cpu should be same as gpu");
 
-        //gpu cpu_keep_in_check
+        //gpu gpu_keep_in_check
         for(size_t i=0; i<result_gpu_back_to_host.size(); i++){
             result_diff[i] = std::abs(result_gpu_back_to_host[i] - result_gpu[i]);
         }
