@@ -6,13 +6,12 @@
 
 namespace cuda_icp {
 
-typedef std::vector<Vec2i> CorrSet_cpu;
-typedef thrust::device_vector<Vec2i> CorrSet_cuda;
+typedef std::vector<int> CorrSet_cpu;
+typedef thrust::device_vector<int> CorrSet_cuda;
 
 /// Class that contains the registration result
 struct RegistrationResult
 {
-public:
     __device__ __host__
     RegistrationResult(const Mat4x4f &transformation =
             Mat4x4f::identity()) : transformation_(transformation),
@@ -98,8 +97,6 @@ struct FindCorrSetFunctor_proj_cpu{
     RegistrationResult GetRegistrationResultAndCorrespondences(
            const PointCloud model_pcd, CorrSet_cpu& corrSet,
             const ICPRejectionCriteria criteria_rej = ICPRejectionCriteria()){
-        corrSet.clear();
-        corrSet.reserve(model_pcd.size_);
 
         RegistrationResult result;
         size_t inliers = 0;
@@ -107,14 +104,16 @@ struct FindCorrSetFunctor_proj_cpu{
         for(size_t i=0; i<model_pcd.size_; i++){
             Vec3i x_y_dep = pcd2dep(model_pcd.data_[i], K, scene_dep.tl_x_, scene_dep.tl_y_);
 
-            Vec2i corr = {int(i), x_y_dep.x + x_y_dep.y*int(scene_dep.width_)};
+            auto index = x_y_dep.x + x_y_dep.y*int(scene_dep.width_);
 
-            float diff = std__abs(scene_dep.data_[size_t(corr.y)] - x_y_dep.z)/1000.0f;
+            float diff = std__abs(scene_dep.data_[index] - x_y_dep.z)/1000.0f;
 
             if( diff < criteria_rej.max_dist_diff_){
                 inliers ++;
                 rmse += diff;
-                corrSet.push_back(corr);
+                corrSet[i] = index;
+            }else{
+                corrSet[i] = -1;
             }
         }
         result.fitness_ = float(inliers)/model_pcd.size_;
