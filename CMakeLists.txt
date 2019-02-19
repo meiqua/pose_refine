@@ -15,8 +15,8 @@ add_subdirectory(cuda_icp)
 
 
 # opencv
-set(CUDA_TOOLKIT_ROOT_DIR /usr/local/cuda-8.0)
-set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} /home/meiqua/anaconda3/envs/furnace)
+set(CUDA_TOOLKIT_ROOT_DIR /usr/local/cuda-10.0)
+#set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} /home/meiqua/anaconda3/envs/furnace)
 find_package(OpenCV 3 REQUIRED)
 list(APPEND pose_refine_inc ${OpenCV_INCLUDE_DIRS})
 list(APPEND pose_refine_lib ${OpenCV_LIBS})

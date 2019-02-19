@@ -1,7 +1,5 @@
 
 # opencv
-set(CUDA_TOOLKIT_ROOT_DIR /usr/local/cuda-8.0)
-set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} /home/meiqua/anaconda3/envs/furnace)
 find_package(OpenCV 3 REQUIRED)
 list(APPEND icp_inc ${OpenCV_INCLUDE_DIRS})
 list(APPEND icp_lib ${OpenCV_LIBS})

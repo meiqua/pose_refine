@@ -29,6 +29,8 @@ __global__ void depth2cloud(int* depth, Vec3f* pcd, size_t width, size_t height,
     if(x>=width) return;
     if(y>=height) return;
     size_t index = x + y*width;
+    if(depth[index] == 0) return;
+
     pcd[scan[index]] = dep2pcd(x, y, depth[index], K, tl_x, tl_y);
 }
 
@@ -41,7 +43,7 @@ __global__ void getCorrespondences(
 
     Vec3i x_y_dep = pcd2dep(model_pcd[i], K, scene_dep.tl_x_, scene_dep.tl_y_);
 
-    auto index = x_y_dep.x + x_y_dep.y*int(scene_dep.width_);
+    int index = x_y_dep.x + x_y_dep.y*int(scene_dep.width_);
 
     float diff = std__abs(scene_dep.data_[index] - x_y_dep.z)/1000.0f;
 
@@ -78,7 +80,6 @@ std::vector<RegistrationResult> RegistrationICP_cuda(const Image model_deps, con
          const auto& deps_mask_entry = thrust::raw_pointer_cast(deps_mask.data()) + i*image_len;
          thrust::transform(thrust::cuda::par.on(streams[i]), model_deps_entry, model_deps_entry+image_len,
                            deps_mask_entry, is_positive_int());
-
     }
     cudaDeviceSynchronize(); // sync all streams
     // may be better to use multi-threads for multi-streams so we don't need to sync all?
@@ -99,12 +100,12 @@ std::vector<RegistrationResult> RegistrationICP_cuda(const Image model_deps, con
     thrust::device_vector<float> rmse(total_counts, 0);
 
     thrust::host_vector<int> pcd_counts_host = pcd_counts;
-    thrust::inclusive_scan(pcd_counts.begin(), pcd_counts.end(), pcd_counts.begin());
+    thrust::exclusive_scan(pcd_counts.begin(), pcd_counts.end(), pcd_counts.begin());
     thrust::host_vector<int> pcd_counts_entry_host = pcd_counts;
 
     for (size_t i = 0; i < model_deps.pose_size_; i++){
         const auto& deps_mask_entry = thrust::raw_pointer_cast(deps_mask.data()) + i*image_len;
-        thrust::inclusive_scan(thrust::cuda::par.on(streams[i]), deps_mask_entry, deps_mask_entry+image_len, deps_mask_entry);
+        thrust::exclusive_scan(thrust::cuda::par.on(streams[i]), deps_mask_entry, deps_mask_entry+image_len, deps_mask_entry);
     }
     cudaDeviceSynchronize(); // sync all streams
 
