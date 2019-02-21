@@ -6,9 +6,6 @@
 
 namespace cuda_icp {
 
-typedef std::vector<int> CorrSet_cpu;
-typedef thrust::device_vector<int> CorrSet_cuda;
-
 /// Class that contains the registration result
 struct RegistrationResult
 {
@@ -59,7 +56,7 @@ struct PointCloud{
     size_t size_;
 
     __device__ __host__
-    PointCloud(size_t size): size_(size){}
+    PointCloud(Vec3f* data, size_t size): data_(data), size_(size){}
 };
 
 // dep: mm
@@ -91,39 +88,6 @@ template<typename T>
 __device__ __host__
 T std__abs(T in){return (in > 0)? in: (-in);}
 
-struct FindCorrSetFunctor_proj_cpu{
-
-    // only need model pcd, kdtree(for closest corr) or scene_dep(for proj corr) are constructed before called
-    RegistrationResult GetRegistrationResultAndCorrespondences(
-           const PointCloud model_pcd, CorrSet_cpu& corrSet,
-            const ICPRejectionCriteria criteria_rej = ICPRejectionCriteria()){
-
-        RegistrationResult result;
-        size_t inliers = 0;
-        float rmse = 0;
-        for(size_t i=0; i<model_pcd.size_; i++){
-            Vec3i x_y_dep = pcd2dep(model_pcd.data_[i], K, scene_dep.tl_x_, scene_dep.tl_y_);
-
-            auto index = x_y_dep.x + x_y_dep.y*int(scene_dep.width_);
-
-            float diff = std__abs(scene_dep.data_[index] - x_y_dep.z)/1000.0f;
-
-            if( diff < criteria_rej.max_dist_diff_){
-                inliers ++;
-                rmse += diff;
-                corrSet[i] = index;
-            }else{
-                corrSet[i] = -1;
-            }
-        }
-        result.fitness_ = float(inliers)/model_pcd.size_;
-        result.inlier_rmse_ = rmse/inliers;
-        return result;
-    }
-
-    Mat3x3f K;
-    Image scene_dep;
-};
 
 /// Functions for ICP registration
 /// depth, mm
