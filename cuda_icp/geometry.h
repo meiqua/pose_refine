@@ -2,10 +2,19 @@
 
 #pragma once
 
+
+#ifdef CUDA_ON
 // cuda
 #include <thrust/host_vector.h>
 #include <thrust/device_vector.h>
 #include <thrust/copy.h>
+
+#else
+// invalidate cuda macro
+#define __device__
+#define __host__
+
+#endif
 
 #include <cmath>
 #include <vector>

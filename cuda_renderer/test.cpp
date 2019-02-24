@@ -1,9 +1,12 @@
 #include "renderer.h"
 #include <chrono>
 
+#ifdef CUDA_ON
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include <driver_functions.h>
+#endif
+
 using namespace cv;
 
 static std::string prefix = "/home/meiqua/patch_linemod/public/datasets/hinterstoisser/";
@@ -60,12 +63,13 @@ int main(int argc, char const *argv[])
     std::vector<cuda_renderer::Model::mat4x4> mat4_v(100, mat4);
     std::cout << "test render nums: " << mat4_v.size() << std::endl;
     std::cout << "---------------------------------\n" << std::endl;
+    helper::Timer timer;
 
+#ifdef CUDA_ON
     {  // gpu need sometime to warm up
         cudaFree(0);
 //        cudaSetDevice(0);
     }
-    helper::Timer timer;
 
     if(true){   //render test
         std::cout << "\nrendering test" << std::endl;
@@ -151,6 +155,16 @@ int main(int argc, char const *argv[])
         cv::imshow("gpu_depth_roi", helper::view_dep(depth));
         cv::waitKey(0);
     }
+#else
+    std::vector<int> result_cpu = cuda_renderer::render_cpu(model.tris, mat4_v, width, height, proj);
+    timer.out("cpu render");
+    // just show first 1
+    cv::Mat depth = cv::Mat(height, width, CV_32SC1, result_cpu.data());
+
+    cv::imshow("mask", depth>0);
+    cv::imshow("depth", helper::view_dep(depth));
+    cv::waitKey(0);
+#endif
 
     return 0;
 }

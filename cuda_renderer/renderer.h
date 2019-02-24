@@ -1,9 +1,17 @@
 #pragma once
 
+#ifdef CUDA_ON
 // cuda
 #include <thrust/host_vector.h>
 #include <thrust/device_vector.h>
 #include <thrust/copy.h>
+
+#else
+// invalidate cuda macro
+#define __device__
+#define __host__
+
+#endif
 
 // load ply
 #include <assimp/cimport.h>
@@ -129,48 +137,104 @@ Model::mat4x4 compute_proj(const cv::Mat& K, int width, int height, float near=1
 
 
 //roi: directly crop while rendering, expected to save much time & space
-std::vector<int32_t> render_cuda(const std::vector<Model::Triangle>& tris,const std::vector<Model::mat4x4>& poses,
-                            size_t width, size_t height, const Model::mat4x4& proj_mat,
-                                 const Model::ROI roi= {0, 0, 0, 0});
-
 std::vector<int32_t> render_cpu(const std::vector<Model::Triangle>& tris,const std::vector<Model::mat4x4>& poses,
                             size_t width, size_t height, const Model::mat4x4& proj_mat,
                                 const Model::ROI roi= {0, 0, 0, 0});
 
+#ifdef CUDA_ON
+std::vector<int32_t> render_cuda(const std::vector<Model::Triangle>& tris,const std::vector<Model::mat4x4>& poses,
+                            size_t width, size_t height, const Model::mat4x4& proj_mat,
+                                 const Model::ROI roi= {0, 0, 0, 0});
+
 thrust::device_vector<int32_t> render_cuda_keep_in_gpu(const std::vector<Model::Triangle>& tris,const std::vector<Model::mat4x4>& poses,
                             size_t width, size_t height, const Model::mat4x4& proj_mat,
                                                        const Model::ROI roi= {0, 0, 0, 0});
-
+#endif
 
 //low_level
-namespace normal_functor{
-    __host__ __device__
-    Model::float3 minus(const Model::float3& one, const Model::float3& the_other);
+namespace normal_functor{  // similar to thrust
+    __host__ __device__ inline
+    Model::float3 minus(const Model::float3& one, const Model::float3& the_other)
+    {
+        return {
+            one.x - the_other.x,
+            one.y - the_other.y,
+            one.z - the_other.z
+        };
+    }
+    __host__ __device__ inline
+    Model::float3 cross(const Model::float3& one, const Model::float3& the_other)
+    {
+        return {
+            one.y*the_other.z - one.z*the_other.y,
+            one.z*the_other.x - one.x*the_other.z,
+            one.x*the_other.y - one.y*the_other.x
+        };
+    }
+    __host__ __device__ inline
+    Model::float3 normalized(const Model::float3& one)
+    {
+        float norm = std::sqrt(one.x*one.x+one.y*one.y+one.z*one.z);
+        return {
+          one.x/norm,
+          one.y/norm,
+          one.z/norm
+        };
+    }
 
-    __host__ __device__
-    Model::float3 cross(const Model::float3& one, const Model::float3& the_other);
+    __host__ __device__ inline
+    Model::float3 get_normal(const Model::Triangle& dev_tri)
+    {
+//      return normalized(cross(minus(dev_tri.v1, dev_tri.v0), minus(dev_tri.v1, dev_tri.v0)));
 
-    __host__ __device__
-    Model::float3 normalized(const Model::float3& one);
+      // no need for normalizing?
+      return (cross(minus(dev_tri.v1, dev_tri.v0), minus(dev_tri.v2, dev_tri.v0)));
+    }
 
-    __host__ __device__
-    Model::float3 get_normal(const Model::Triangle& dev_tri);
-
-    __host__ __device__
-    bool is_back(const Model::Triangle& dev_tri);
+    __host__ __device__ inline
+    bool is_back(const Model::Triangle& dev_tri){
+        return normal_functor::get_normal(dev_tri).z < 0;
+    }
 };
 
-__host__ __device__
-Model::float3 mat_mul_v(const Model::mat4x4& tran, const Model::float3& v);
+__host__ __device__ inline
+Model::float3 mat_mul_v(const Model::mat4x4& tran, const Model::float3& v){
+    return {
+        tran.a0*v.x + tran.a1*v.y + tran.a2*v.z + tran.a3,
+        tran.b0*v.x + tran.b1*v.y + tran.b2*v.z + tran.b3,
+        tran.c0*v.x + tran.c1*v.y + tran.c2*v.z + tran.c3,
+    };
+}
 
-__host__ __device__
-Model::Triangle transform_triangle(const Model::Triangle& dev_tri, const Model::mat4x4& tran);
+__host__ __device__ inline
+Model::Triangle transform_triangle(const Model::Triangle& dev_tri, const Model::mat4x4& tran){
+    return {
+        mat_mul_v(tran, (dev_tri.v0)),
+        mat_mul_v(tran, (dev_tri.v1)),
+        mat_mul_v(tran, (dev_tri.v2)),
+    };
+}
 
-__host__ __device__
-float calculateSignedArea(float* A, float* B, float* C);
+__host__ __device__ inline
+float calculateSignedArea(float* A, float* B, float* C){
+    return 0.5f*((C[0]-A[0])*(B[1]-A[1]) - (B[0]-A[0])*(C[1]-A[1]));
+}
 
-__host__ __device__
-Model::float3 barycentric(float* A, float* B, float* C, size_t* P);
+__host__ __device__ inline
+Model::float3 barycentric(float* A, float* B, float* C, size_t* P) {
+
+    float float_P[2] = {float(P[0]), float(P[1])};
+
+    auto base_inv = 1/calculateSignedArea(A, B, C);
+    auto beta = calculateSignedArea(A, float_P, C)*base_inv;
+    auto gamma = calculateSignedArea(A, B, float_P)*base_inv;
+
+    return {
+        1.0f-beta-gamma,
+        beta,
+        gamma,
+    };
+}
 
 __host__ __device__ inline
 float std__max(float a, float b){return (a>b)? a: b;};

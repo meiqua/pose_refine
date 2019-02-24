@@ -5,18 +5,21 @@ list(APPEND icp_inc ${OpenCV_INCLUDE_DIRS})
 list(APPEND icp_lib ${OpenCV_LIBS})
 
 
+if(USE_CUDA)
 # cuda
 find_package(CUDA REQUIRED)
 set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} -std=c++11 -O3 --default-stream per-thread")
 list(APPEND icp_inc ${CUDA_INCLUDE_DIRS})
 list(APPEND icp_lib ${CUDA_LIBRARIES})
-
+endif()
 
 # src
 SET(icp_cuda_srcs icp.cu)
 SET(icp_srcs icp.cpp)
-CUDA_COMPILE(icp_cuda_objs ${icp_cuda_srcs})
 
+if(USE_CUDA)
+CUDA_COMPILE(icp_cuda_objs ${icp_cuda_srcs})
+endif()
 
 # lib & test exe
 add_library(cuda_icp

@@ -33,39 +33,8 @@ public:
     int max_iteration_;
 };
 
-struct ICPRejectionCriteria
-{
-public:
-    __device__ __host__
-    ICPRejectionCriteria(float max_dist_diff = 0.1f) : max_dist_diff_(max_dist_diff) {}
-
-    float max_dist_diff_;
-};
-
-struct Image{
-    int32_t* data_;  //depth, pointer may take risks of memeory managment, but can unify host & device vector
-    size_t tl_x_, tl_y_, width_, height_, pose_size_; // cropped when rendering
-
-    __device__ __host__
-    Image(size_t tl_x=0, size_t tl_y=0, size_t width=640, size_t height=480, size_t pose_size=1) :
-    tl_x_(tl_x), tl_y_(tl_y), width_(width), height_(height), pose_size_(pose_size){}
-};
-
-struct PointCloud{
-    Vec3f* pcd_ptr_;
-    size_t pose_size_;
-    size_t* start_idx;
-};
-
-struct Scene_info{
-    size_t width_, height_;
-    uint8_t* mask;  // mask for where depth > 0
-    Vec3f* pcd_ptr, normal_ptr;  // layout: 1d, width*height length, array of Vec3f
-    Mat3x3f K;
-};
-
 // dep: mm
-__device__ __host__
+__device__ __host__ inline
 Vec3f dep2pcd(size_t x, size_t y, int32_t dep, Mat3x3f K, size_t tl_x=0, size_t tl_y=0){
     float z_pcd = dep/1000.0f;
     float x_pcd = (x + tl_x - K[0][2])/K[0][0]*z_pcd;
@@ -77,7 +46,7 @@ Vec3f dep2pcd(size_t x, size_t y, int32_t dep, Mat3x3f K, size_t tl_x=0, size_t 
     };
 }
 
-__device__ __host__
+__device__ __host__ inline
 Vec3i pcd2dep(Vec3f pcd, Mat3x3f K, size_t tl_x=0, size_t tl_y=0){
     int dep = int(pcd.z*1000.0f + 0.5f);
     int x = int(pcd.x/pcd.z*K[0][0] + K[0][2] - tl_x +0.5f);
@@ -90,19 +59,44 @@ Vec3i pcd2dep(Vec3f pcd, Mat3x3f K, size_t tl_x=0, size_t tl_y=0){
 }
 
 template<typename T>
-__device__ __host__
+__device__ __host__ inline
 T std__abs(T in){return (in > 0)? in: (-in);}
 
+struct Scene_info{
+    size_t width = 640, height = 480;
+    float max_dist_diff = 0.1f; // m
+    Mat3x3f K;
+    Vec3f* pcd_ptr;
+    Vec3f* normal_ptr;  // layout: 1d, width*height length, array of Vec3f
 
+    __device__ __host__
+    void query(const Vec3f& src_pcd, Vec3f& dst_pcd, Vec3f& dst_normal, bool& valid){
+        Vec3i x_y_dep = pcd2dep(src_pcd, K);
+        size_t idx = x_y_dep.x + x_y_dep.y * width;
+        dst_pcd = pcd_ptr[idx];
+
+        if(dst_pcd.z <= 0 || std__abs(src_pcd.z - dst_pcd.z) > max_dist_diff){
+            valid = false;
+            return;
+        }else valid = true;
+
+        dst_normal = normal_ptr[idx];
+    }
+};
+
+
+typedef std::vector<Vec3f> PointCloud_cpu;
+
+#ifdef CUDA_ON
+typedef thrust::device_vector<Vec3f> PointCloud_cuda;
 /// Functions for ICP registration
-/// depth, mm
-std::vector<RegistrationResult> RegistrationICP_cuda(const Image model_deps,
-        const Image scene_dep, Mat3x3f K,
-        const ICPRejectionCriteria criteria_rej = ICPRejectionCriteria(),
+RegistrationResult RegistrationICP_cuda(const PointCloud_cuda model_pcd,
+        const Scene_info scene,
+        const ICPConvergenceCriteria criteria_conv = ICPConvergenceCriteria());
+#endif
+
+RegistrationResult RegistrationICP_cpu(const PointCloud_cpu model_pcd,
+        const Scene_info scene,
         const ICPConvergenceCriteria criteria_conv = ICPConvergenceCriteria());
 
-std::vector<RegistrationResult> RegistrationICP_cpu(const PointCloud model_pcds,
-        const Scene_info scene,
-        const ICPRejectionCriteria criteria_rej = ICPRejectionCriteria(),
-        const ICPConvergenceCriteria criteria_conv = ICPConvergenceCriteria());
 }

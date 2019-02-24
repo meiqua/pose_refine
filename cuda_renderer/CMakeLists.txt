@@ -4,13 +4,13 @@ find_package(OpenCV 3 REQUIRED)
 list(APPEND renderer_inc ${OpenCV_INCLUDE_DIRS})
 list(APPEND renderer_lib ${OpenCV_LIBS})
 
-
+if(USE_CUDA)
 # cuda
 find_package(CUDA REQUIRED)
 set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} -std=c++11 -O3")
 list(APPEND renderer_inc ${CUDA_INCLUDE_DIRS})
 list(APPEND renderer_lib ${CUDA_LIBRARIES})
-
+endif()
 
 # assimp, load ply
 find_package(ASSIMP REQUIRED)
@@ -22,7 +22,10 @@ list(APPEND renderer_lib ${ASSIMP_LIBRARIES})
 # src
 SET(renderer_cuda renderer.cu)
 SET(renderer_srcs renderer.cpp)
+
+if(USE_CUDA)
 CUDA_COMPILE(renderer_cuda_objs ${renderer_cuda})
+endif()
 
 
 # lib & test exe
