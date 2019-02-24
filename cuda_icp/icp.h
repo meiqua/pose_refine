@@ -43,8 +43,8 @@ public:
 };
 
 struct Image{
-    int32_t* data_;  //pointer may take risks of memeory managment, but can unify host & device vector
-    size_t tl_x_, tl_y_, width_, height_, pose_size_;
+    int32_t* data_;  //depth, pointer may take risks of memeory managment, but can unify host & device vector
+    size_t tl_x_, tl_y_, width_, height_, pose_size_; // cropped when rendering
 
     __device__ __host__
     Image(size_t tl_x=0, size_t tl_y=0, size_t width=640, size_t height=480, size_t pose_size=1) :
@@ -52,11 +52,16 @@ struct Image{
 };
 
 struct PointCloud{
-    Vec3f* data_;  //pointer may take risks of memeory managment, but can unify host & device vector
-    size_t size_;
+    Vec3f* pcd_ptr_;
+    size_t pose_size_;
+    size_t* start_idx;
+};
 
-    __device__ __host__
-    PointCloud(Vec3f* data, size_t size): data_(data), size_(size){}
+struct Scene_info{
+    size_t width_, height_;
+    uint8_t* mask;  // mask for where depth > 0
+    Vec3f* pcd_ptr, normal_ptr;  // layout: 1d, width*height length, array of Vec3f
+    Mat3x3f K;
 };
 
 // dep: mm
@@ -96,8 +101,8 @@ std::vector<RegistrationResult> RegistrationICP_cuda(const Image model_deps,
         const ICPRejectionCriteria criteria_rej = ICPRejectionCriteria(),
         const ICPConvergenceCriteria criteria_conv = ICPConvergenceCriteria());
 
-std::vector<RegistrationResult> RegistrationICP_cpu(const Image model_deps,
-        const Image scene_dep, Mat3x3f K,
+std::vector<RegistrationResult> RegistrationICP_cpu(const PointCloud model_pcds,
+        const Scene_info scene,
         const ICPRejectionCriteria criteria_rej = ICPRejectionCriteria(),
         const ICPConvergenceCriteria criteria_conv = ICPConvergenceCriteria());
 }
