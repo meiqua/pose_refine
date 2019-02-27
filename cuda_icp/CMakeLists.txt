@@ -13,6 +13,12 @@ list(APPEND icp_inc ${CUDA_INCLUDE_DIRS})
 list(APPEND icp_lib ${CUDA_LIBRARIES})
 endif()
 
+
+# eigen
+find_package(Eigen3 REQUIRED)
+include_directories(${EIGEN3_INCLUDE_DIR})
+
+
 # src
 SET(icp_cuda_srcs icp.cu)
 SET(icp_srcs icp.cpp)

@@ -70,7 +70,7 @@ struct Scene_info{
     Vec3f* normal_ptr;  // layout: 1d, width*height length, array of Vec3f
 
     __device__ __host__
-    void query(const Vec3f& src_pcd, Vec3f& dst_pcd, Vec3f& dst_normal, bool& valid){
+    void query(const Vec3f& src_pcd, Vec3f& dst_pcd, Vec3f& dst_normal, bool& valid) const {
         Vec3i x_y_dep = pcd2dep(src_pcd, K);
         size_t idx = x_y_dep.x + x_y_dep.y * width;
         dst_pcd = pcd_ptr[idx];
@@ -90,12 +90,12 @@ typedef std::vector<Vec3f> PointCloud_cpu;
 #ifdef CUDA_ON
 typedef thrust::device_vector<Vec3f> PointCloud_cuda;
 /// Functions for ICP registration
-RegistrationResult RegistrationICP_cuda(const PointCloud_cuda model_pcd,
+RegistrationResult RegistrationICP_cuda(const PointCloud_cuda& model_pcd,
         const Scene_info scene,
         const ICPConvergenceCriteria criteria_conv = ICPConvergenceCriteria());
 #endif
 
-RegistrationResult RegistrationICP_cpu(const PointCloud_cpu model_pcd,
+RegistrationResult RegistrationICP_cpu(const PointCloud_cpu& model_pcd,
         const Scene_info scene,
         const ICPConvergenceCriteria criteria_conv = ICPConvergenceCriteria());
 

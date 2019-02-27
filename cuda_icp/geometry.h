@@ -283,6 +283,9 @@ typedef vec<4,  float> Vec4i;
 typedef mat<4,4,float> Mat4x4f;
 typedef mat<3,3,float> Mat3x3f;
 
+typedef vec<3,  float> Vec6f;
+typedef mat<6,6,float> Mat6x6f;
+
 template <> template <> __device__ __host__
 inline vec<3,int>  ::vec(const vec<3,float> &v) : x(int(v.x+.5f)),y(int(v.y+.5f)),z(int(v.z+.5f)) {}
 template <> template <> __device__ __host__
