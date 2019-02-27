@@ -44,7 +44,6 @@ RegistrationResult RegistrationICP_cpu(PointCloud_cpu& model_pcd, const Scene_in
 {
     RegistrationResult result;
 
-
     // buffer can make pcd handling indenpendent
     // may waste memory, but become easy to parallel
     Eigen::Matrix<float, Eigen::Dynamic, 6> A_buffer(model_pcd.size(), 6); A_buffer.setZero();

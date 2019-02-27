@@ -6,7 +6,6 @@
 
 namespace cuda_icp {
 
-/// Class that contains the registration result
 struct RegistrationResult
 {
     __device__ __host__
