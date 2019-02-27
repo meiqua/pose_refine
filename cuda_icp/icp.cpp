@@ -43,6 +43,7 @@ RegistrationResult RegistrationICP_cpu(PointCloud_cpu& model_pcd, const Scene_in
                                        const ICPConvergenceCriteria criteria_conv)
 {
     RegistrationResult result;
+    RegistrationResult backup;
 
     // buffer can make pcd handling indenpendent
     // may waste memory, but become easy to parallel
@@ -89,11 +90,13 @@ RegistrationResult RegistrationICP_cpu(PointCloud_cpu& model_pcd, const Scene_in
             total_error += std::sqrt(b_buffer(i)*b_buffer(i));
         }
 
+        backup = result;
+
         result.fitness_ = float(count) / model_pcd.size();
         result.inlier_rmse_ = total_error / count;
 
-        if(result.fitness_ > criteria_conv.relative_fitness_ &&
-                result.inlier_rmse_ < criteria_conv.relative_rmse_){
+        if(std::abs(result.fitness_ - backup.fitness_) < criteria_conv.relative_fitness_ &&
+           std::abs(result.inlier_rmse_ - backup.inlier_rmse_) < criteria_conv.relative_rmse_){
             return result;
         }
 
@@ -107,6 +110,8 @@ RegistrationResult RegistrationICP_cpu(PointCloud_cpu& model_pcd, const Scene_in
         Mat4x4f ext_custom = eigen_to_custom(extrinsic);
         result.transformation_ = ext_custom * result.transformation_;
     }
+
+    return result;
 }
 
 }
