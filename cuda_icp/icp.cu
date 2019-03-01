@@ -142,6 +142,8 @@ RegistrationResult ICP_Point2Plane_cuda(PointCloud_cuda &model_pcd, const Scene 
         stat = cublasSgemv(cublas_handle, CUBLAS_OP_N, 6, model_pcd.size(), &alpha, A_buffer_ptr,
                           6, b_buffer_ptr, 1, &beta, b_dev_ptr, 1);
         stat = cublasGetVector(6, sizeof(float), b_dev_ptr, 1, b_host_ptr, 1);
+
+        Mat4x4f extrinsic = eigen_slover_666(A_host_ptr, b_host_ptr);
     }
 
     return result;

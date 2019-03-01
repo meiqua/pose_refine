@@ -1,12 +1,11 @@
+#pragma once
 
-
-# pragma once
-
-# include "geometry.h"
+#include "geometry.h"
 
 namespace cuda_icp {
 
-// use custom mat/vec here, otherwise we have to use long eigen declaration everywhere
+// use custom mat/vec here, otherwise we have to mix eigen with cuda
+// ohterwise we may face some error due to eigen vesrion
 //refer to open3d
 struct RegistrationResult
 {
@@ -63,6 +62,8 @@ template<typename T>
 __device__ __host__ inline
 T std__abs(T in){return (in > 0)? in: (-in);}
 
+// just implement query func,
+// no matter it's projective or ANN
 struct Scene_projective{
     size_t width = 640, height = 480;
     float max_dist_diff = 0.1f; // m
@@ -84,6 +85,11 @@ struct Scene_projective{
         dst_normal = normal_ptr[idx];
     }
 };
+
+
+// to be used by icp cuda & cpu
+// in this way we can avoid eigen mixed with cuda
+Mat4x4f eigen_slover_666(float* A, float* b);
 
 typedef std::vector<Vec3f> PointCloud_cpu;
 template <class Scene>

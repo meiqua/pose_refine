@@ -16,13 +16,13 @@ Eigen::Matrix4f TransformVector6dToMatrix4f(const Eigen::Matrix<float, 6, 1> &in
     return output;
 }
 
-void transform_pcd(PointCloud_cpu& model_pcd, Eigen::Matrix4f& trans){
+void transform_pcd(PointCloud_cpu& model_pcd, Mat4x4f& trans){
 
     for(size_t i=0; i < model_pcd.size(); i++){
         Vec3f& pcd = model_pcd[i];
-        float new_x = trans(0, 0)*pcd.x + trans(0, 1)*pcd.y + trans(0, 2)*pcd.z + trans(0, 3);
-        float new_y = trans(1, 0)*pcd.x + trans(1, 1)*pcd.y + trans(1, 2)*pcd.z + trans(1, 3);
-        float new_z = trans(2, 0)*pcd.x + trans(2, 1)*pcd.y + trans(2, 2)*pcd.z + trans(2, 3);
+        float new_x = trans[0][0]*pcd.x + trans[0][1]*pcd.y + trans[0][2]*pcd.z + trans[0][3];
+        float new_y = trans[1][0]*pcd.x + trans[1][1]*pcd.y + trans[1][2]*pcd.z + trans[1][3];
+        float new_z = trans[2][0]*pcd.x + trans[2][1]*pcd.y + trans[2][2]*pcd.z + trans[2][3];
         pcd.x = new_x;
         pcd.y = new_y;
         pcd.z = new_z;
@@ -37,6 +37,15 @@ Mat4x4f eigen_to_custom(const Eigen::Matrix4f& extrinsic){
         }
     }
     return result;
+}
+
+Mat4x4f eigen_slover_666(float *A, float *b)
+{
+    Eigen::Matrix<float, 6, 6> A_eigen(A);
+    Eigen::Matrix<float, 6, 1> b_eigen(b);
+    const Eigen::Matrix<float, 6, 1> update = A_eigen.cast<float>().ldlt().solve(b_eigen.cast<float>());
+    Eigen::Matrix4f extrinsic = TransformVector6dToMatrix4f(update);
+    return eigen_to_custom(extrinsic);
 }
 
 template<class Scene>
@@ -103,17 +112,16 @@ RegistrationResult ICP_Point2Plane_cpu(PointCloud_cpu &model_pcd, const Scene sc
 
         Eigen::Matrix<float, 6, 6> A = A_buffer.transpose()*A_buffer;
         Eigen::Matrix<float, 6, 1> b = A_buffer.transpose()*b_buffer;
-        const Eigen::Matrix<float, 6, 1> update = A.cast<float>().ldlt().solve(b.cast<float>());
 
-        Eigen::Matrix4f extrinsic = TransformVector6dToMatrix4f(update);
+        Mat4x4f extrinsic = eigen_slover_666(A.data(), b.data());
         transform_pcd(model_pcd, extrinsic);
-
-        Mat4x4f ext_custom = eigen_to_custom(extrinsic);
-        result.transformation_ = ext_custom * result.transformation_;
+        result.transformation_ = extrinsic * result.transformation_;
     }
 
     return result;
 }
+
+
 }
 
 
