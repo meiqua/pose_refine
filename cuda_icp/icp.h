@@ -1,4 +1,4 @@
-//refer to open3d
+
 
 # pragma once
 
@@ -6,6 +6,8 @@
 
 namespace cuda_icp {
 
+// use custom mat/vec here, otherwise we have to use long eigen declaration everywhere
+//refer to open3d
 struct RegistrationResult
 {
     __device__ __host__
@@ -61,11 +63,11 @@ template<typename T>
 __device__ __host__ inline
 T std__abs(T in){return (in > 0)? in: (-in);}
 
-struct Scene_info{
+struct Scene_projective{
     size_t width = 640, height = 480;
     float max_dist_diff = 0.1f; // m
     Mat3x3f K;
-    Vec3f* pcd_ptr;
+    Vec3f* pcd_ptr;  // pointer can unify cpu & cuda version
     Vec3f* normal_ptr;  // layout: 1d, width*height length, array of Vec3f
 
     __device__ __host__
@@ -83,19 +85,18 @@ struct Scene_info{
     }
 };
 
-
 typedef std::vector<Vec3f> PointCloud_cpu;
+template <class Scene>
+RegistrationResult ICP_Point2Plane_cpu(PointCloud_cpu& model_pcd,
+        const Scene scene,
+        const ICPConvergenceCriteria criteria = ICPConvergenceCriteria());
 
 #ifdef CUDA_ON
 typedef thrust::device_vector<Vec3f> PointCloud_cuda;
-/// Functions for ICP registration
-RegistrationResult RegistrationICP_cuda(const PointCloud_cuda& model_pcd,
-        const Scene_info scene,
-        const ICPConvergenceCriteria criteria_conv = ICPConvergenceCriteria());
+template <class Scene>
+RegistrationResult ICP_Point2Plane_cuda(PointCloud_cuda& model_pcd,
+        const Scene scene,
+        const ICPConvergenceCriteria criteria = ICPConvergenceCriteria());
 #endif
-
-RegistrationResult RegistrationICP_cpu(const PointCloud_cpu& model_pcd,
-        const Scene_info scene,
-        const ICPConvergenceCriteria criteria_conv = ICPConvergenceCriteria());
 
 }

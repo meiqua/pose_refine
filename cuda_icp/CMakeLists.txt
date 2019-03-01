@@ -10,7 +10,7 @@ if(USE_CUDA)
 find_package(CUDA REQUIRED)
 set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} -std=c++11 -O3 --default-stream per-thread")
 list(APPEND icp_inc ${CUDA_INCLUDE_DIRS})
-list(APPEND icp_lib ${CUDA_LIBRARIES})
+list(APPEND icp_lib ${CUDA_LIBRARIES} ${CUDA_CUBLAS_LIBRARIES} cusolver)
 endif()
 
 
@@ -35,7 +35,6 @@ add_library(cuda_icp
 )
 target_include_directories(cuda_icp PUBLIC ${icp_inc})
 target_link_libraries(cuda_icp PUBLIC ${icp_lib})
-
 
 add_executable(icp_test test.cpp)
 target_link_libraries(icp_test cuda_icp)

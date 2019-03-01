@@ -39,20 +39,21 @@ Mat4x4f eigen_to_custom(const Eigen::Matrix4f& extrinsic){
     return result;
 }
 
-RegistrationResult RegistrationICP_cpu(PointCloud_cpu& model_pcd, const Scene_info scene,
-                                       const ICPConvergenceCriteria criteria_conv)
+template<class Scene>
+RegistrationResult ICP_Point2Plane_cpu(PointCloud_cpu &model_pcd, const Scene scene,
+                                       const ICPConvergenceCriteria criteria)
 {
     RegistrationResult result;
     RegistrationResult backup;
 
     // buffer can make pcd handling indenpendent
-    // may waste memory, but become easy to parallel
+    // may waste memory, but make it easy to parallel
     Eigen::Matrix<float, Eigen::Dynamic, 6> A_buffer(model_pcd.size(), 6); A_buffer.setZero();
     Eigen::Matrix<float, Eigen::Dynamic, 1> b_buffer(model_pcd.size(), 1); b_buffer.setZero();
 
-    std::vector<uint8_t> valid_buffer(model_pcd.size());
+    std::vector<uint8_t> valid_buffer(model_pcd.size(), 0);
 
-    for(int iter=0; iter<criteria_conv.max_iteration_; iter++){
+    for(int iter=0; iter<criteria.max_iteration_; iter++){
 
 #pragma omp parallel for
         for(int i = 0; i<model_pcd.size(); i++){
@@ -95,8 +96,8 @@ RegistrationResult RegistrationICP_cpu(PointCloud_cpu& model_pcd, const Scene_in
         result.fitness_ = float(count) / model_pcd.size();
         result.inlier_rmse_ = total_error / count;
 
-        if(std::abs(result.fitness_ - backup.fitness_) < criteria_conv.relative_fitness_ &&
-           std::abs(result.inlier_rmse_ - backup.inlier_rmse_) < criteria_conv.relative_rmse_){
+        if(std::abs(result.fitness_ - backup.fitness_) < criteria.relative_fitness_ &&
+           std::abs(result.inlier_rmse_ - backup.inlier_rmse_) < criteria.relative_rmse_){
             return result;
         }
 
@@ -113,7 +114,6 @@ RegistrationResult RegistrationICP_cpu(PointCloud_cpu& model_pcd, const Scene_in
 
     return result;
 }
-
 }
 
 
