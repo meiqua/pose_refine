@@ -6,9 +6,6 @@
 #include "cublas_v2.h"
 #define IDX2C(i, j, ld) (((j)*(ld))+(i))
 
-// for ldlt solver
-#include <cusolverDn.h>
-
 namespace cuda_icp {
 
 #define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
@@ -88,8 +85,8 @@ RegistrationResult ICP_Point2Plane_cuda(PointCloud_cuda &model_pcd, const Scene 
     thrust::device_vector<float> b_buffer(model_pcd.size(), 0);
     thrust::device_vector<uint8_t> valid_buffer(model_pcd.size(), 0);
 
-    thrust::device_vector<float> A(36, 0);
-    thrust::device_vector<float> b(6, 0);
+    thrust::device_vector<float> A_dev(36);
+    thrust::device_vector<float> b_dev(6);
 
     // cast to pointer, ready to feed kernel
     Vec3f* model_pcd_ptr = thrust::raw_pointer_cast(model_pcd.data());
@@ -97,8 +94,8 @@ RegistrationResult ICP_Point2Plane_cuda(PointCloud_cuda &model_pcd, const Scene 
     float* b_buffer_ptr =  thrust::raw_pointer_cast(b_buffer.data());
     uint8_t* valid_buffer_ptr =  thrust::raw_pointer_cast(valid_buffer.data());
 
-    float* A_ptr =  thrust::raw_pointer_cast(A.data());
-    float* b_ptr =  thrust::raw_pointer_cast(b.data());
+    float* A_dev_ptr =  thrust::raw_pointer_cast(A_dev.data());
+    float* b_dev_ptr =  thrust::raw_pointer_cast(b_dev.data());
 
     const size_t threadsPerBlock = 256;
     const size_t numBlocks = (model_pcd.size() + threadsPerBlock - 1)/threadsPerBlock;
@@ -111,24 +108,11 @@ RegistrationResult ICP_Point2Plane_cuda(PointCloud_cuda &model_pcd, const Scene 
     float beta =1.0f;  // bet =1
     /// cublas <-----------------------------------------
 
+    thrust::host_vector<float> A_host(36);
+    thrust::host_vector<float> b_host(36);
 
-    /// cusolver ----------------------------------------->
-    cusolverStatus_t cusolverStatus;
-    cusolverDnHandle_t cusolver_handle;
-    cusolverStatus = cusolverDnCreate(&cusolver_handle); // create handle
-    cublasFillMode_t uplo = CUBLAS_FILL_MODE_LOWER;
-    const char upl = 'L';
-    // use lower triangular part of A
-
-    int Lwork = -1;
-    thrust::device_vector<float> work;
-    thrust::device_vector<int> pivot(6);
-    thrust::device_vector<int> info(1);
-
-    float* work_ptr = thrust::raw_pointer_cast(work.data());
-    int* pivot_ptr = thrust::raw_pointer_cast(pivot.data());
-    int* info_ptr = thrust::raw_pointer_cast(info.data());
-    /// cusolver <-----------------------------------------
+    float* A_host_ptr = A_host.data();
+    float* b_host_ptr = b_host.data();
 
     for(int iter=0; iter<criteria.max_iteration_; iter++){
 
@@ -151,24 +135,13 @@ RegistrationResult ICP_Point2Plane_cuda(PointCloud_cuda &model_pcd, const Scene 
 
         // A = A_buffer.transpose()*A_buffer;
         stat = cublasSsyrk(cublas_handle, CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_N,
-                            6, model_pcd.size(), &alpha, A_buffer_ptr, 6, &beta, A_ptr, 6);
+                            6, model_pcd.size(), &alpha, A_buffer_ptr, 6, &beta, A_dev_ptr, 6);
+        stat = cublasGetMatrix(6, 6, sizeof(float), A_dev_ptr , 6, A_host_ptr, 6);
 
         // b = A_buffer.transpose()*b_buffer;
         stat = cublasSgemv(cublas_handle, CUBLAS_OP_N, 6, model_pcd.size(), &alpha, A_buffer_ptr,
-                          6, b_buffer_ptr, 1, &beta, b_ptr, 1);
-
-        // update = A.cast<float>().ldlt().solve(b.cast<float>());
-        if(Lwork <=0){
-            // compute buffer size and prepare memory
-            cusolverStatus = cusolverDnSsytrf_bufferSize(cusolver_handle , 6, A_ptr, 6, &Lwork);
-            work.resize(Lwork);
-        }
-
-        // ldlt
-        cusolverStatus = cusolverDnSsytrf(cusolver_handle, uplo, 6, A_ptr, 6, pivot_ptr,
-                                          work_ptr, Lwork, info_ptr);
-        cudaDeviceSynchronize();
-
+                          6, b_buffer_ptr, 1, &beta, b_dev_ptr, 1);
+        stat = cublasGetVector(6, sizeof(float), b_dev_ptr, 1, b_host_ptr, 1);
     }
 
     return result;
