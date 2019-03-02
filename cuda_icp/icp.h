@@ -1,6 +1,8 @@
 #pragma once
 
 #include "geometry.h"
+#include <thrust/scan.h>
+#include <thrust/execution_policy.h>
 
 namespace cuda_icp {
 
@@ -46,7 +48,7 @@ RegistrationResult ICP_Point2Plane_cpu(PointCloud_cpu& model_pcd,
 // depth can be int32, if we use our cuda renderer
 // tl_x tl_y: depth may be cropped by renderer directly
 template <class T>
-PointCloud_cpu depth2cloud_cpu(T* depth, size_t width, size_t height, Mat3x3f K,
+PointCloud_cpu depth2cloud_cpu(T* depth, size_t width, size_t height, Mat3x3f& K,
                                size_t tl_x = 0, size_t tl_y = 0);
 
 #ifdef CUDA_ON
@@ -59,7 +61,7 @@ RegistrationResult ICP_Point2Plane_cuda(PointCloud_cuda& model_pcd,
 // depth can be int32, if we use our cuda renderer
 // tl_x tl_y: depth may be cropped by renderer directly
 template <class T>
-PointCloud_cuda depth2cloud_cuda(T* depth, size_t width, size_t height, Mat3x3f K,
+PointCloud_cuda depth2cloud_cuda(T* depth, size_t width, size_t height, Mat3x3f& K,
                                 size_t tl_x = 0, size_t tl_y = 0);
 #endif
 
