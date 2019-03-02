@@ -37,6 +37,7 @@ Mat4x4f eigen_slover_666(float *A, float *b)
 
 void transform_pcd(PointCloud_cpu& model_pcd, Mat4x4f& trans){
 
+#pragma omp parallel for
     for(size_t i=0; i < model_pcd.size(); i++){
         Vec3f& pcd = model_pcd[i];
         float new_x = trans[0][0]*pcd.x + trans[0][1]*pcd.y + trans[0][2]*pcd.z + trans[0][3];
