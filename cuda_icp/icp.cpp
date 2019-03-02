@@ -101,12 +101,11 @@ RegistrationResult ICP_Point2Plane_cpu(PointCloud_cpu &model_pcd, const Scene sc
             count += valid_buffer[i];
             total_error += (b_buffer(i)*b_buffer(i));
         }
-        total_error = std::sqrt(total_error);
 
         backup = result;
 
         result.fitness_ = float(count) / model_pcd.size();
-        result.inlier_rmse_ = total_error / count;
+        result.inlier_rmse_ = std::sqrt(total_error / count);
 
         // last extra iter, just compute fitness & mse
         if(iter == criteria.max_iteration_) return result;
@@ -141,13 +140,16 @@ void cpu_exclusive_scan_serial(T* start, size_t N){
 }
 
 template<class T>
-PointCloud_cpu depth2cloud_cpu(T *depth, size_t width, size_t height, Mat3x3f& K, size_t tl_x, size_t tl_y)
+PointCloud_cpu depth2cloud_cpu(T *depth, size_t width, size_t height, Mat3x3f& K,
+                                size_t stride, size_t tl_x, size_t tl_y)
 {
-    std::vector<int32_t> mask(width*height, 0);
+    std::vector<int32_t> mask(width*height/stride/stride, 0);
 
-#pragma omp parallel for
-    for(size_t i=0; i<width*height; i++){
-        if(depth[i] > 0) mask[i] = 1;
+#pragma omp parallel for collapse(2)
+    for(size_t x=0; x<width/stride; x++){
+        for(size_t y=0; y<height/stride; y++){
+            if(depth[x*stride + y*stride*width] > 0) mask[x + y*width] = 1;
+        }
     }
 
     // scan to find map: depth idx --> cloud idx
@@ -164,18 +166,19 @@ PointCloud_cpu depth2cloud_cpu(T *depth, size_t width, size_t height, Mat3x3f& K
     PointCloud_cpu cloud(total_pcd_num);
 
 #pragma omp parallel for collapse(2)
-    for(size_t x=0; x<width; x++){
-        for(size_t y=0; y<height; y++){
+    for(size_t x=0; x<width/stride; x++){
+        for(size_t y=0; y<height/stride; y++){
 
-            size_t idx = x + y*width;
+            size_t idx_depth = x*stride + y*stride*width;
+            size_t idx_mask = x + y*width;
 
-            if(depth[idx] <= 0) continue;
+            if(depth[idx_depth] <= 0) continue;
 
-            float z_pcd = depth[idx]/1000.0f;
+            float z_pcd = depth[idx_depth]/1000.0f;
             float x_pcd = (x + tl_x - K[0][2])/K[0][0]*z_pcd;
             float y_pcd = (y + tl_y - K[1][2])/K[1][1]*z_pcd;
 
-            cloud[mask[idx]] = {x_pcd, y_pcd, z_pcd};
+            cloud[mask[idx_mask]] = {x_pcd, y_pcd, z_pcd};
         }
     }
     return cloud;

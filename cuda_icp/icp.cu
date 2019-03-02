@@ -125,12 +125,11 @@ RegistrationResult ICP_Point2Plane_cuda(PointCloud_cuda &model_pcd, const Scene 
         int count = thrust::reduce(valid_buffer.begin(), valid_buffer.end());
         float total_error = thrust::transform_reduce(b_buffer.begin(), b_buffer.end(),
                                                      thrust__squre<float>(), 0, thrust::plus<float>());
-        total_error = std::sqrt(total_error);
 
         backup = result;
 
         result.fitness_ = float(count) / model_pcd.size();
-        result.inlier_rmse_ = total_error / count;
+        result.inlier_rmse_ = std::sqrt(total_error / count);
 
         // last extra iter, just compute fitness & mse
         if(iter == criteria.max_iteration_) return result;
@@ -161,38 +160,46 @@ RegistrationResult ICP_Point2Plane_cuda(PointCloud_cuda &model_pcd, const Scene 
     return result;
 }
 
-struct is_positive{
 
-    template<class T>
-    __host__ __device__
-    T operator()(const T x) const
-    {
-      return (x>0)? 1: 0;
-    }
-};
-
-__global__ void depth2cloud(int* depth, Vec3f* pcd, size_t width, size_t height, int* scan, Mat3x3f K,
-                          size_t tl_x, size_t tl_y){
+template <class T>
+__global__ void depth2mask(T* depth, int32_t* mask, size_t width, size_t height, size_t stride){
     size_t x = blockIdx.x*blockDim.x + threadIdx.x;
     size_t y = blockIdx.y*blockDim.y + threadIdx.y;
-    if(x>=width) return;
-    if(y>=height) return;
-    size_t index = x + y*width;
-    if(depth[index] == 0) return;
+    if(x*stride>=width) return;
+    if(y*stride>=height) return;
 
-    float z_pcd = depth[index]/1000.0f;
+    if(depth[x*stride + y*stride*width] > 0) mask[x + y*width] = 1;
+}
+
+template <class T>
+__global__ void depth2cloud(T* depth, Vec3f* pcd, size_t width, size_t height, int* scan, Mat3x3f K,
+                          size_t stride, size_t tl_x, size_t tl_y){
+    size_t x = blockIdx.x*blockDim.x + threadIdx.x;
+    size_t y = blockIdx.y*blockDim.y + threadIdx.y;
+    if(x*stride>=width) return;
+    if(y*stride>=height) return;
+    size_t index_mask = x + y*width;
+    size_t idx_depth = x*stride + y*stride*width;
+    if(depth[idx_depth] <= 0) return;
+
+    float z_pcd = depth[idx_depth]/1000.0f;
     float x_pcd = (x + tl_x - K[0][2])/K[0][0]*z_pcd;
     float y_pcd = (y + tl_y - K[1][2])/K[1][1]*z_pcd;
 
-    pcd[scan[index]] = {x_pcd, y_pcd, z_pcd};
+    pcd[scan[index_mask]] = {x_pcd, y_pcd, z_pcd};
 }
 
 template<class T>
-PointCloud_cuda depth2cloud_cuda(T *depth, size_t width, size_t height, Mat3x3f& K, size_t tl_x, size_t tl_y)
+PointCloud_cuda depth2cloud_cuda(T *depth, size_t width, size_t height, Mat3x3f& K,
+                                 size_t stride, size_t tl_x, size_t tl_y)
 {
-    thrust::device_vector<int32_t> mask(width*height, 0);
+    thrust::device_vector<int32_t> mask(width*height/stride/stride, 0);
+    int32_t* mask_ptr = thrust::raw_pointer_cast(mask.data());
 
-    thrust::transform(mask.begin(), mask.end(), mask.begin(), is_positive());
+    const dim3 threadsPerBlock(16, 16);
+    dim3 numBlocks_stride((width/stride + 15)/16, (height/stride + 15)/16);
+    depth2mask<<< numBlocks_stride, threadsPerBlock>>>(depth, mask_ptr, width, height, stride);
+    cudaDeviceSynchronize();
 
     // scan to find map: depth idx --> cloud idx
     int32_t mask_back_temp = mask.back();
@@ -200,15 +207,11 @@ PointCloud_cuda depth2cloud_cuda(T *depth, size_t width, size_t height, Mat3x3f&
     int32_t total_pcd_num = mask.back() + mask_back_temp;
 
     PointCloud_cuda cloud(total_pcd_num);
-
-    int32_t* mask_ptr = thrust::raw_pointer_cast(mask.data());
     Vec3f* cloud_ptr = thrust::raw_pointer_cast(cloud.data());
 
-    dim3 threadsPerBlock(16, 16);
-    dim3 numBlocks((width + 15)/16, (height + 15)/16);
-    depth2cloud<<< numBlocks, threadsPerBlock>>>(depth, cloud_ptr, width, height,
-                                                 mask_ptr, K, tl_x, tl_y);
-
+    depth2cloud<<< numBlocks_stride, threadsPerBlock>>>(depth, cloud_ptr, width, height,
+                                                 mask_ptr, K, stride, tl_x, tl_y);
+    cudaDeviceSynchronize();
     return cloud;
 }
 
