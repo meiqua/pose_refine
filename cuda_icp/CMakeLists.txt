@@ -20,8 +20,8 @@ include_directories(${EIGEN3_INCLUDE_DIR})
 
 
 # src
-SET(icp_cuda_srcs icp.cu adapter/depth_adapter.cu)
-SET(icp_srcs icp.cpp adapter/depth_adapter.cpp)
+SET(icp_cuda_srcs icp.cu scene/depth_scene/depth_scene.cu)
+SET(icp_srcs icp.cpp scene/common.cpp scene/depth_scene/depth_scene.cpp)
 
 
 if(USE_CUDA)

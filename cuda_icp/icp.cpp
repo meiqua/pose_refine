@@ -62,6 +62,7 @@ RegistrationResult ICP_Point2Plane_cpu(PointCloud_cpu &model_pcd, const Scene sc
 
     std::vector<uint8_t> valid_buffer(model_pcd.size(), 0);
 
+    // use one extra turn
     for(int iter=0; iter<=criteria.max_iteration_; iter++){
 
 #pragma omp parallel for
@@ -122,7 +123,14 @@ RegistrationResult ICP_Point2Plane_cpu(PointCloud_cpu &model_pcd, const Scene sc
         result.transformation_ = extrinsic * result.transformation_;
     }
 
+    // never arrive here
     return result;
+}
+
+template<class T>
+PointCloud_cpu depth2cloud_cpu(T *depth, size_t width, size_t height, Mat3x3f K, size_t tl_x, size_t tl_y)
+{
+
 }
 
 

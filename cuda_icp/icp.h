@@ -5,8 +5,8 @@
 namespace cuda_icp {
 
 // use custom mat/vec here, otherwise we have to mix eigen with cuda
-// ohterwise we may face some error due to eigen vesrion
-//refer to open3d
+// then we may face some error due to eigen vesrion
+//class defination refer to open3d
 struct RegistrationResult
 {
     __device__ __host__
@@ -43,12 +43,24 @@ RegistrationResult ICP_Point2Plane_cpu(PointCloud_cpu& model_pcd,
         const Scene scene,
         const ICPConvergenceCriteria criteria = ICPConvergenceCriteria());
 
+// depth can be int32, if we use our cuda renderer
+// tl_x tl_y: depth may be cropped by renderer directly
+template <class T>
+PointCloud_cpu depth2cloud_cpu(T* depth, size_t width, size_t height, Mat3x3f K,
+                               size_t tl_x = 0, size_t tl_y = 0);
+
 #ifdef CUDA_ON
 typedef thrust::device_vector<Vec3f> PointCloud_cuda;
 template <class Scene>
 RegistrationResult ICP_Point2Plane_cuda(PointCloud_cuda& model_pcd,
         const Scene scene,
         const ICPConvergenceCriteria criteria = ICPConvergenceCriteria());
+
+// depth can be int32, if we use our cuda renderer
+// tl_x tl_y: depth may be cropped by renderer directly
+template <class T>
+PointCloud_cuda depth2cloud_cuda(T* depth, size_t width, size_t height, Mat3x3f K,
+                                size_t tl_x = 0, size_t tl_y = 0);
 #endif
 
 }

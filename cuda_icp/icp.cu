@@ -116,6 +116,7 @@ RegistrationResult ICP_Point2Plane_cuda(PointCloud_cuda &model_pcd, const Scene 
     float* A_host_ptr = A_host.data();
     float* b_host_ptr = b_host.data();
 
+    // use one extra turn
     for(int iter=0; iter<= criteria.max_iteration_; iter++){
 
         get_Ab<<<numBlocks, threadsPerBlock>>>(scene, model_pcd_ptr, model_pcd.size(),
@@ -157,7 +158,7 @@ RegistrationResult ICP_Point2Plane_cuda(PointCloud_cuda &model_pcd, const Scene 
         result.transformation_ = extrinsic * result.transformation_;
     }
 
-    // never here
+    // never arrive here
     return result;
 }
 
