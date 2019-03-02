@@ -16,19 +16,6 @@ Eigen::Matrix4f TransformVector6dToMatrix4f(const Eigen::Matrix<float, 6, 1> &in
     return output;
 }
 
-void transform_pcd(PointCloud_cpu& model_pcd, Mat4x4f& trans){
-
-    for(size_t i=0; i < model_pcd.size(); i++){
-        Vec3f& pcd = model_pcd[i];
-        float new_x = trans[0][0]*pcd.x + trans[0][1]*pcd.y + trans[0][2]*pcd.z + trans[0][3];
-        float new_y = trans[1][0]*pcd.x + trans[1][1]*pcd.y + trans[1][2]*pcd.z + trans[1][3];
-        float new_z = trans[2][0]*pcd.x + trans[2][1]*pcd.y + trans[2][2]*pcd.z + trans[2][3];
-        pcd.x = new_x;
-        pcd.y = new_y;
-        pcd.z = new_z;
-    }
-}
-
 Mat4x4f eigen_to_custom(const Eigen::Matrix4f& extrinsic){
     Mat4x4f result;
     for(int i=0; i<4; i++){
@@ -48,6 +35,19 @@ Mat4x4f eigen_slover_666(float *A, float *b)
     return eigen_to_custom(extrinsic);
 }
 
+void transform_pcd(PointCloud_cpu& model_pcd, Mat4x4f& trans){
+
+    for(size_t i=0; i < model_pcd.size(); i++){
+        Vec3f& pcd = model_pcd[i];
+        float new_x = trans[0][0]*pcd.x + trans[0][1]*pcd.y + trans[0][2]*pcd.z + trans[0][3];
+        float new_y = trans[1][0]*pcd.x + trans[1][1]*pcd.y + trans[1][2]*pcd.z + trans[1][3];
+        float new_z = trans[2][0]*pcd.x + trans[2][1]*pcd.y + trans[2][2]*pcd.z + trans[2][3];
+        pcd.x = new_x;
+        pcd.y = new_y;
+        pcd.z = new_z;
+    }
+}
+
 template<class Scene>
 RegistrationResult ICP_Point2Plane_cpu(PointCloud_cpu &model_pcd, const Scene scene,
                                        const ICPConvergenceCriteria criteria)
@@ -62,7 +62,7 @@ RegistrationResult ICP_Point2Plane_cpu(PointCloud_cpu &model_pcd, const Scene sc
 
     std::vector<uint8_t> valid_buffer(model_pcd.size(), 0);
 
-    for(int iter=0; iter<criteria.max_iteration_; iter++){
+    for(int iter=0; iter<=criteria.max_iteration_; iter++){
 
 #pragma omp parallel for
         for(int i = 0; i<model_pcd.size(); i++){
@@ -97,13 +97,17 @@ RegistrationResult ICP_Point2Plane_cpu(PointCloud_cpu &model_pcd, const Scene sc
 #pragma omp parallel for reduction(+:count, total_error)
         for(size_t i=0; i<model_pcd.size(); i++){
             count += valid_buffer[i];
-            total_error += std::sqrt(b_buffer(i)*b_buffer(i));
+            total_error += (b_buffer(i)*b_buffer(i));
         }
+        total_error = std::sqrt(total_error);
 
         backup = result;
 
         result.fitness_ = float(count) / model_pcd.size();
         result.inlier_rmse_ = total_error / count;
+
+        // last extra iter, just compute fitness & mse
+        if(iter == criteria.max_iteration_) return result;
 
         if(std::abs(result.fitness_ - backup.fitness_) < criteria.relative_fitness_ &&
            std::abs(result.inlier_rmse_ - backup.inlier_rmse_) < criteria.relative_rmse_){

@@ -20,8 +20,9 @@ include_directories(${EIGEN3_INCLUDE_DIR})
 
 
 # src
-SET(icp_cuda_srcs icp.cu)
-SET(icp_srcs icp.cpp)
+SET(icp_cuda_srcs icp.cu adapter/depth_adapter.cu)
+SET(icp_srcs icp.cpp adapter/depth_adapter.cpp)
+
 
 if(USE_CUDA)
 CUDA_COMPILE(icp_cuda_objs ${icp_cuda_srcs})

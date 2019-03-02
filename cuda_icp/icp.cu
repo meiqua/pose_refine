@@ -1,6 +1,7 @@
 #include "icp.h"
 #include <thrust/scan.h>
-#include <thrust/system/cuda/execution_policy.h>
+#include <thrust/transform_reduce.h>
+#include <thrust/functional.h>
 
 // for matrix multi
 #include "cublas_v2.h"
@@ -18,26 +19,27 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=t
    }
 }
 
-struct is_positive_int{
-
-    __host__ __device__
-    int32_t operator()(const int32_t x) const
-    {
-      return (x>0)? 1: 0;
-    }
+template<typename T>
+struct thrust__squre : public thrust::unary_function<T,T>
+{
+  __host__ __device__ T operator()(const T &x) const
+  {
+    return x * x;
+  }
 };
 
-//__global__ void depth2cloud(int* depth, Vec3f* pcd, size_t width, size_t height, int* scan, Mat3x3f K,
-//                          size_t tl_x, size_t tl_y){
-//    size_t x = blockIdx.x*blockDim.x + threadIdx.x;
-//    size_t y = blockIdx.y*blockDim.y + threadIdx.y;
-//    if(x>=width) return;
-//    if(y>=height) return;
-//    size_t index = x + y*width;
-//    if(depth[index] == 0) return;
+__global__ void transform_pcd(Vec3f* model_pcd_ptr, size_t model_pcd_size, Mat4x4f trans){
+    size_t i = blockIdx.x*blockDim.x + threadIdx.x;
+    if(i >= model_pcd_size) return;
 
-//    pcd[scan[index]] = dep2pcd(x, y, depth[index], K, tl_x, tl_y);
-//}
+    Vec3f& pcd = model_pcd_ptr[i];
+    float new_x = trans[0][0]*pcd.x + trans[0][1]*pcd.y + trans[0][2]*pcd.z + trans[0][3];
+    float new_y = trans[1][0]*pcd.x + trans[1][1]*pcd.y + trans[1][2]*pcd.z + trans[1][3];
+    float new_z = trans[2][0]*pcd.x + trans[2][1]*pcd.y + trans[2][2]*pcd.z + trans[2][3];
+    pcd.x = new_x;
+    pcd.y = new_y;
+    pcd.z = new_z;
+}
 
 template<class Scene>
 __global__ void get_Ab(const Scene scene, Vec3f* model_pcd_ptr, size_t model_pcd_size,
@@ -114,19 +116,24 @@ RegistrationResult ICP_Point2Plane_cuda(PointCloud_cuda &model_pcd, const Scene 
     float* A_host_ptr = A_host.data();
     float* b_host_ptr = b_host.data();
 
-    for(int iter=0; iter<criteria.max_iteration_; iter++){
+    for(int iter=0; iter<= criteria.max_iteration_; iter++){
 
         get_Ab<<<numBlocks, threadsPerBlock>>>(scene, model_pcd_ptr, model_pcd.size(),
                                                A_buffer_ptr, b_buffer_ptr, valid_buffer_ptr);
         cudaDeviceSynchronize();
 
         int count = thrust::reduce(valid_buffer.begin(), valid_buffer.end());
-        float total_error = thrust::reduce(b_buffer.begin(), b_buffer.end());
+        float total_error = thrust::transform_reduce(b_buffer.begin(), b_buffer.end(),
+                                                     thrust__squre<float>(), 0, thrust::plus<float>());
+        total_error = std::sqrt(total_error);
 
         backup = result;
 
         result.fitness_ = float(count) / model_pcd.size();
         result.inlier_rmse_ = total_error / count;
+
+        // last extra iter, just compute fitness & mse
+        if(iter == criteria.max_iteration_) return result;
 
         if(std::abs(result.fitness_ - backup.fitness_) < criteria.relative_fitness_ &&
            std::abs(result.inlier_rmse_ - backup.inlier_rmse_) < criteria.relative_rmse_){
@@ -144,8 +151,13 @@ RegistrationResult ICP_Point2Plane_cuda(PointCloud_cuda &model_pcd, const Scene 
         stat = cublasGetVector(6, sizeof(float), b_dev_ptr, 1, b_host_ptr, 1);
 
         Mat4x4f extrinsic = eigen_slover_666(A_host_ptr, b_host_ptr);
+
+        transform_pcd<<<numBlocks, threadsPerBlock>>>(model_pcd_ptr, model_pcd.size(), extrinsic);
+
+        result.transformation_ = extrinsic * result.transformation_;
     }
 
+    // never here
     return result;
 }
 
