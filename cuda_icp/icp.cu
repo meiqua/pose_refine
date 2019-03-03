@@ -107,6 +107,9 @@ RegistrationResult ICP_Point2Plane_cuda(PointCloud_cuda &model_pcd, const Scene 
     stat = cublasCreate(&cublas_handle);
     float alpha =1.0f;  // al =1
     float beta =1.0f;  // bet =1
+
+    // avoid blocking for multi-thread
+    cublasSetStream_v2(cublas_handle, cudaStreamPerThread);
     /// cublas <-----------------------------------------
 
     thrust::host_vector<float> A_host(36);
@@ -120,7 +123,9 @@ RegistrationResult ICP_Point2Plane_cuda(PointCloud_cuda &model_pcd, const Scene 
 
         get_Ab<<<numBlocks, threadsPerBlock>>>(scene, model_pcd_ptr, model_pcd.size(),
                                                A_buffer_ptr, b_buffer_ptr, valid_buffer_ptr);
-        cudaDeviceSynchronize();
+
+        // avoid block all in multi-thread case
+        cudaStreamSynchronize(cudaStreamPerThread);
 
         int count = thrust::reduce(valid_buffer.begin(), valid_buffer.end());
         float total_error = thrust::transform_reduce(b_buffer.begin(), b_buffer.end(),
@@ -152,6 +157,7 @@ RegistrationResult ICP_Point2Plane_cuda(PointCloud_cuda &model_pcd, const Scene 
         Mat4x4f extrinsic = eigen_slover_666(A_host_ptr, b_host_ptr);
 
         transform_pcd<<<numBlocks, threadsPerBlock>>>(model_pcd_ptr, model_pcd.size(), extrinsic);
+        cudaStreamSynchronize(cudaStreamPerThread);
 
         result.transformation_ = extrinsic * result.transformation_;
     }
@@ -199,7 +205,9 @@ PointCloud_cuda depth2cloud_cuda(T *depth, size_t width, size_t height, Mat3x3f&
     const dim3 threadsPerBlock(16, 16);
     dim3 numBlocks_stride((width/stride + 15)/16, (height/stride + 15)/16);
     depth2mask<<< numBlocks_stride, threadsPerBlock>>>(depth, mask_ptr, width, height, stride);
-    cudaDeviceSynchronize();
+
+    // avoid blocking per-thread streams
+    cudaStreamSynchronize(cudaStreamPerThread);
 
     // scan to find map: depth idx --> cloud idx
     int32_t mask_back_temp = mask.back();
@@ -211,7 +219,7 @@ PointCloud_cuda depth2cloud_cuda(T *depth, size_t width, size_t height, Mat3x3f&
 
     depth2cloud<<< numBlocks_stride, threadsPerBlock>>>(depth, cloud_ptr, width, height,
                                                  mask_ptr, K, stride, tl_x, tl_y);
-    cudaDeviceSynchronize();
+    cudaStreamSynchronize(cudaStreamPerThread);
     return cloud;
 }
 
