@@ -127,9 +127,12 @@ RegistrationResult ICP_Point2Plane_cuda(PointCloud_cuda &model_pcd, const Scene 
         // avoid block all in multi-thread case
         cudaStreamSynchronize(cudaStreamPerThread);
 
-        int count = thrust::reduce(valid_buffer.begin(), valid_buffer.end());
-        float total_error = thrust::transform_reduce(b_buffer.begin(), b_buffer.end(),
+        int count = thrust::reduce(thrust::cuda::par.on(cudaStreamPerThread),
+                                   valid_buffer.begin(), valid_buffer.end());
+        float total_error = thrust::transform_reduce(thrust::cuda::par.on(cudaStreamPerThread),
+                                                     b_buffer.begin(), b_buffer.end(),
                                                      thrust__squre<float>(), 0, thrust::plus<float>());
+        cudaStreamSynchronize(cudaStreamPerThread);
 
         backup = result;
 
