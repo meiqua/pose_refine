@@ -157,7 +157,8 @@ PointCloud_cpu depth2cloud_cpu(T *depth, size_t width, size_t height, Mat3x3f& K
 
     // without cuda this can't be used
 #ifdef CUDA_ON
-    thrust::exclusive_scan(thrust::host, mask.begin(), mask.end(), mask.begin(), 0); // in-place scan
+//    thrust::exclusive_scan(thrust::host, mask.begin(), mask.end(), mask.begin(), 0); // in-place scan
+    cpu_exclusive_scan_serial(mask.data(), mask.size()); // serial version is better in cpu maybe
 #else
     cpu_exclusive_scan_serial(mask.data(), mask.size());
 #endif
