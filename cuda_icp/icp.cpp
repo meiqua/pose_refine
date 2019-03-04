@@ -143,7 +143,7 @@ template<class T>
 PointCloud_cpu depth2cloud_cpu(T *depth, size_t width, size_t height, Mat3x3f& K,
                                 size_t stride, size_t tl_x, size_t tl_y)
 {
-    std::vector<int32_t> mask(width*height/stride/stride, 0);
+    std::vector<size_t> mask(width*height/stride/stride, 0);
 
 #pragma omp parallel for collapse(2)
     for(size_t x=0; x<width/stride; x++){
@@ -153,7 +153,7 @@ PointCloud_cpu depth2cloud_cpu(T *depth, size_t width, size_t height, Mat3x3f& K
     }
 
     // scan to find map: depth idx --> cloud idx
-    int32_t mask_back_temp = mask.back();
+    size_t mask_back_temp = mask.back();
 
     // without cuda this can't be used
 #ifdef CUDA_ON
@@ -162,7 +162,7 @@ PointCloud_cpu depth2cloud_cpu(T *depth, size_t width, size_t height, Mat3x3f& K
 #else
     cpu_exclusive_scan_serial(mask.data(), mask.size());
 #endif
-    int32_t total_pcd_num = mask.back() + mask_back_temp;
+    size_t total_pcd_num = mask.back() + mask_back_temp;
 
     PointCloud_cpu cloud(total_pcd_num);
 

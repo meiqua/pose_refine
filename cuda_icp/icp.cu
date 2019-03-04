@@ -171,7 +171,7 @@ RegistrationResult ICP_Point2Plane_cuda(PointCloud_cuda &model_pcd, const Scene 
 
 
 template <class T>
-__global__ void depth2mask(T* depth, int32_t* mask, size_t width, size_t height, size_t stride){
+__global__ void depth2mask(T* depth, size_t* mask, size_t width, size_t height, size_t stride){
     size_t x = blockIdx.x*blockDim.x + threadIdx.x;
     size_t y = blockIdx.y*blockDim.y + threadIdx.y;
     if(x*stride>=width) return;
@@ -202,8 +202,8 @@ template<class T>
 PointCloud_cuda depth2cloud_cuda(T *depth, size_t width, size_t height, Mat3x3f& K,
                                  size_t stride, size_t tl_x, size_t tl_y)
 {
-    thrust::device_vector<int32_t> mask(width*height/stride/stride, 0);
-    int32_t* mask_ptr = thrust::raw_pointer_cast(mask.data());
+    thrust::device_vector<size_t> mask(width*height/stride/stride, 0);
+    size_t* mask_ptr = thrust::raw_pointer_cast(mask.data());
 
     const dim3 threadsPerBlock(16, 16);
     dim3 numBlocks_stride((width/stride + 15)/16, (height/stride + 15)/16);
@@ -213,9 +213,9 @@ PointCloud_cuda depth2cloud_cuda(T *depth, size_t width, size_t height, Mat3x3f&
     cudaStreamSynchronize(cudaStreamPerThread);
 
     // scan to find map: depth idx --> cloud idx
-    int32_t mask_back_temp = mask.back();
+    size_t mask_back_temp = mask.back();
     thrust::exclusive_scan(mask.begin(), mask.end(), mask.begin(), 0); // in-place scan
-    int32_t total_pcd_num = mask.back() + mask_back_temp;
+    size_t total_pcd_num = mask.back() + mask_back_temp;
 
     PointCloud_cuda cloud(total_pcd_num);
     Vec3f* cloud_ptr = thrust::raw_pointer_cast(cloud.data());
