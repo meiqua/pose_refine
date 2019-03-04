@@ -181,7 +181,7 @@ __global__ void depth2mask(T* depth, size_t* mask, size_t width, size_t height, 
 }
 
 template <class T>
-__global__ void depth2cloud(T* depth, Vec3f* pcd, size_t width, size_t height, int* scan, Mat3x3f K,
+__global__ void depth2cloud(T* depth, Vec3f* pcd, size_t width, size_t height, size_t* scan, Mat3x3f K,
                           size_t stride, size_t tl_x, size_t tl_y){
     size_t x = blockIdx.x*blockDim.x + threadIdx.x;
     size_t y = blockIdx.y*blockDim.y + threadIdx.y;
