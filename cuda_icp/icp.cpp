@@ -18,8 +18,8 @@ Eigen::Matrix4f TransformVector6dToMatrix4f(const Eigen::Matrix<float, 6, 1> &in
 
 Mat4x4f eigen_to_custom(const Eigen::Matrix4f& extrinsic){
     Mat4x4f result;
-    for(int i=0; i<4; i++){
-        for(int j=0; j<4; j++){
+    for(size_t i=0; i<4; i++){
+        for(size_t j=0; j<4; j++){
             result[i][j] = extrinsic(i, j);
         }
     }
@@ -30,7 +30,7 @@ Mat4x4f eigen_slover_666(float *A, float *b)
 {
     Eigen::Matrix<float, 6, 6> A_eigen(A);
     Eigen::Matrix<float, 6, 1> b_eigen(b);
-    const Eigen::Matrix<float, 6, 1> update = A_eigen.cast<float>().ldlt().solve(b_eigen.cast<float>());
+    const Eigen::Matrix<float, 6, 1> update = A_eigen.ldlt().solve(b_eigen);
     Eigen::Matrix4f extrinsic = TransformVector6dToMatrix4f(update);
     return eigen_to_custom(extrinsic);
 }
@@ -61,13 +61,13 @@ RegistrationResult ICP_Point2Plane_cpu(PointCloud_cpu &model_pcd, const Scene sc
     Eigen::Matrix<float, Eigen::Dynamic, 6> A_buffer(model_pcd.size(), 6); A_buffer.setZero();
     Eigen::Matrix<float, Eigen::Dynamic, 1> b_buffer(model_pcd.size(), 1); b_buffer.setZero();
 
-    std::vector<uint8_t> valid_buffer(model_pcd.size(), 0);
+    std::vector<size_t> valid_buffer(model_pcd.size(), 0);
 
     // use one extra turn
-    for(int iter=0; iter<=criteria.max_iteration_; iter++){
+    for(size_t iter=0; iter<=criteria.max_iteration_; iter++){
 
 #pragma omp parallel for
-        for(int i = 0; i<model_pcd.size(); i++){
+        for(size_t i = 0; i<model_pcd.size(); i++){
             const auto& src_pcd = model_pcd[i];
 
             Vec3f dst_pcd, dst_normal; bool valid;
@@ -94,7 +94,7 @@ RegistrationResult ICP_Point2Plane_cpu(PointCloud_cpu &model_pcd, const Scene sc
             // so don't need to consider valid_buffer, just multi matrix
         }
 
-        int count = 0;
+        size_t count = 0;
         float total_error = 0;
 #pragma omp parallel for reduction(+:count, total_error)
         for(size_t i=0; i<model_pcd.size(); i++){

@@ -42,7 +42,7 @@ __global__ void transform_pcd(Vec3f* model_pcd_ptr, size_t model_pcd_size, Mat4x
 
 template<class Scene>
 __global__ void get_Ab(const Scene scene, Vec3f* model_pcd_ptr, size_t model_pcd_size,
-                        float* A_buffer_ptr, float* b_buffer_ptr, uint8_t* valid_buffer_ptr){
+                        float* A_buffer_ptr, float* b_buffer_ptr, size_t* valid_buffer_ptr){
     size_t i = blockIdx.x*blockDim.x + threadIdx.x;
     if(i >= model_pcd_size) return;
 
@@ -84,7 +84,8 @@ RegistrationResult ICP_Point2Plane_cuda(PointCloud_cuda &model_pcd, const Scene 
     // may waste memory, but make it easy to parallel
     thrust::device_vector<float> A_buffer(model_pcd.size()*6, 0);
     thrust::device_vector<float> b_buffer(model_pcd.size(), 0);
-    thrust::device_vector<uint8_t> valid_buffer(model_pcd.size(), 0);
+    thrust::device_vector<size_t> valid_buffer(model_pcd.size(), 0);
+    // bool is enough, size_t for risk in reduction
 
     thrust::device_vector<float> A_dev(36);
     thrust::device_vector<float> b_dev(6);
@@ -93,7 +94,7 @@ RegistrationResult ICP_Point2Plane_cuda(PointCloud_cuda &model_pcd, const Scene 
     Vec3f* model_pcd_ptr = thrust::raw_pointer_cast(model_pcd.data());
     float* A_buffer_ptr =  thrust::raw_pointer_cast(A_buffer.data());
     float* b_buffer_ptr =  thrust::raw_pointer_cast(b_buffer.data());
-    uint8_t* valid_buffer_ptr =  thrust::raw_pointer_cast(valid_buffer.data());
+    size_t* valid_buffer_ptr =  thrust::raw_pointer_cast(valid_buffer.data());
 
     float* A_dev_ptr =  thrust::raw_pointer_cast(A_dev.data());
     float* b_dev_ptr =  thrust::raw_pointer_cast(b_dev.data());
@@ -119,7 +120,7 @@ RegistrationResult ICP_Point2Plane_cuda(PointCloud_cuda &model_pcd, const Scene 
     float* b_host_ptr = b_host.data();
 
     // use one extra turn
-    for(int iter=0; iter<= criteria.max_iteration_; iter++){
+    for(size_t iter=0; iter<= criteria.max_iteration_; iter++){
 
         get_Ab<<<numBlocks, threadsPerBlock>>>(scene, model_pcd_ptr, model_pcd.size(),
                                                A_buffer_ptr, b_buffer_ptr, valid_buffer_ptr);
@@ -127,7 +128,7 @@ RegistrationResult ICP_Point2Plane_cuda(PointCloud_cuda &model_pcd, const Scene 
         // avoid block all in multi-thread case
         cudaStreamSynchronize(cudaStreamPerThread);
 
-        int count = thrust::reduce(thrust::cuda::par.on(cudaStreamPerThread),
+        size_t count = thrust::reduce(thrust::cuda::par.on(cudaStreamPerThread),
                                    valid_buffer.begin(), valid_buffer.end());
         float total_error = thrust::transform_reduce(thrust::cuda::par.on(cudaStreamPerThread),
                                                      b_buffer.begin(), b_buffer.end(),
