@@ -110,7 +110,7 @@ static bool isRotationMatrix(cv::Mat &R){
     transpose(R, Rt);
     cv::Mat shouldBeIdentity = Rt * R;
     cv::Mat I = cv::Mat::eye(3,3, shouldBeIdentity.type());
-    return  norm(I, shouldBeIdentity) < 1e-6;
+    return  norm(I, shouldBeIdentity) < 1e-5;
 }
 
 static cv::Vec3f rotationMatrixToEulerAngles(cv::Mat R){
@@ -175,7 +175,7 @@ int main(int argc, char const *argv[]){
                  -0.26157897, -0.65877056, -0.61767070, 0.22904489, -0.75234390);
     Mat t_ren = (Mat_<float>(3,1) << 0.0, 0.0, 300.0);
 
-    float angle_y = 15.0f/180.0f*3.14f;
+    float angle_y = 20.0f/180.0f*3.14f;
     Mat rot_mat = helper::eulerAnglesToRotationMatrix({0.0f, angle_y, 0.0f,});
 
     Mat R_ren2 = rot_mat * R_ren;
@@ -215,11 +215,15 @@ int main(int argc, char const *argv[]){
     Mat result_cv = helper::mat4x4f2cv(result.transformation_);
     Mat R = result_cv(cv::Rect(0, 0, 3, 3));
 
-    cout << "result_cv:" << endl;
+    cout << "\nresult: " << endl;
+    cout << "result fitness: " << result.fitness_ << endl;
+    cout << "result mse: " << result.inlier_rmse_ << endl;
+
+    cout << "\nresult_cv:" << endl;
     cout << result_cv << endl;
     auto R_v = helper::rotationMatrixToEulerAngles(R);
 
-    cout << "\nerror in degree:\n";
+    cout << "\nerror in degree:" << endl;
     cout << "x: " << abs(R_v[0])/3.14f*180  << endl;
     cout << "y: " << abs(R_v[1] - angle_y)/3.14f*180 << endl;
     cout << "z: " << abs(R_v[2])/3.14f*180  << endl;

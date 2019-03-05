@@ -4,13 +4,13 @@
 #include <Eigen/Geometry>
 
 namespace cuda_icp{
-Eigen::Matrix4f TransformVector6dToMatrix4f(const Eigen::Matrix<float, 6, 1> &input) {
-    Eigen::Matrix4f output;
+Eigen::Matrix4d TransformVector6dToMatrix4d(const Eigen::Matrix<double, 6, 1> &input) {
+    Eigen::Matrix4d output;
     output.setIdentity();
     output.block<3, 3>(0, 0) =
-            (Eigen::AngleAxisf(input(2), Eigen::Vector3f::UnitZ()) *
-             Eigen::AngleAxisf(input(1), Eigen::Vector3f::UnitY()) *
-             Eigen::AngleAxisf(input(0), Eigen::Vector3f::UnitX()))
+            (Eigen::AngleAxisd(input(2), Eigen::Vector3d::UnitZ()) *
+             Eigen::AngleAxisd(input(1), Eigen::Vector3d::UnitY()) *
+             Eigen::AngleAxisd(input(0), Eigen::Vector3d::UnitX()))
                     .matrix();
     output.block<3, 1>(0, 3) = input.block<3, 1>(3, 0);
     return output;
@@ -30,9 +30,9 @@ Mat4x4f eigen_slover_666(float *A, float *b)
 {
     Eigen::Matrix<float, 6, 6> A_eigen(A);
     Eigen::Matrix<float, 6, 1> b_eigen(b);
-    const Eigen::Matrix<float, 6, 1> update = A_eigen.ldlt().solve(b_eigen);
-    Eigen::Matrix4f extrinsic = TransformVector6dToMatrix4f(update);
-    return eigen_to_custom(extrinsic);
+    const Eigen::Matrix<double, 6, 1> update = A_eigen.cast<double>().ldlt().solve(b_eigen.cast<double>());
+    Eigen::Matrix4d extrinsic = TransformVector6dToMatrix4d(update);
+    return eigen_to_custom(extrinsic.cast<float>());
 }
 
 void transform_pcd(PointCloud_cpu& model_pcd, Mat4x4f& trans){
