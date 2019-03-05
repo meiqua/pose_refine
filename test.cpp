@@ -209,7 +209,7 @@ int main(int argc, char const *argv[]){
     cout << "depth 1: " << bbox1 << endl;
     cout << "depth 2: " << bbox2 << endl;
     cout << "init pixel diff xy: "
-         << abs(bbox1.x - bbox2.x) << "    " <<  abs(bbox1.y - bbox2.y) << endl;
+         << abs(bbox1.x - bbox2.x) << "----" <<  abs(bbox1.y - bbox2.y) << endl;
 
 //    cv::imshow("depth_1", helper::view_dep(depth_1));
 //    cv::imshow("depth_2", helper::view_dep(depth_2));
