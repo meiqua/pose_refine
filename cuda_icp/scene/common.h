@@ -8,12 +8,13 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/core/core.hpp>
 
-struct Scene_projective; // defined in depth scene
-
 // dep: mm
 template <class T>
 __device__ __host__ inline
 Vec3f dep2pcd(size_t x, size_t y, T dep, Mat3x3f& K, size_t tl_x=0, size_t tl_y=0){
+
+    if(dep == 0) return {0, 0, 0};
+
     float z_pcd = dep/1000.0f;
     float x_pcd = (x + tl_x - K[0][2])/K[0][0]*z_pcd;
     float y_pcd = (y + tl_y - K[1][2])/K[1][1]*z_pcd;

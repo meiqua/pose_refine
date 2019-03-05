@@ -6,8 +6,7 @@
 #include "cublas_v2.h"
 #define IDX2C(i, j, ld) (((j)*(ld))+(i))
 
-namespace cuda_icp {
-
+namespace cuda_icp{
 #define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
 inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
 {
@@ -27,8 +26,8 @@ struct thrust__squre : public thrust::unary_function<T,T>
   }
 };
 
-__global__ void transform_pcd(Vec3f* model_pcd_ptr, size_t model_pcd_size, Mat4x4f trans){
-    size_t i = blockIdx.x*blockDim.x + threadIdx.x;
+__global__ void transform_pcd(Vec3f* model_pcd_ptr, uint32_t model_pcd_size, Mat4x4f trans){
+    uint32_t i = blockIdx.x*blockDim.x + threadIdx.x;
     if(i >= model_pcd_size) return;
 
     Vec3f& pcd = model_pcd_ptr[i];
@@ -41,9 +40,9 @@ __global__ void transform_pcd(Vec3f* model_pcd_ptr, size_t model_pcd_size, Mat4x
 }
 
 template<class Scene>
-__global__ void get_Ab(const Scene scene, Vec3f* model_pcd_ptr, size_t model_pcd_size,
-                        float* A_buffer_ptr, float* b_buffer_ptr, size_t* valid_buffer_ptr){
-    size_t i = blockIdx.x*blockDim.x + threadIdx.x;
+__global__ void get_Ab(const Scene scene, Vec3f* model_pcd_ptr, uint32_t model_pcd_size,
+                        float* A_buffer_ptr, float* b_buffer_ptr, uint32_t* valid_buffer_ptr){
+    uint32_t i = blockIdx.x*blockDim.x + threadIdx.x;
     if(i >= model_pcd_size) return;
 
     const auto& src_pcd = model_pcd_ptr[i];
@@ -74,7 +73,7 @@ __global__ void get_Ab(const Scene scene, Vec3f* model_pcd_ptr, size_t model_pcd
 }
 
 template<class Scene>
-RegistrationResult ICP_Point2Plane_cuda(PointCloud_cuda &model_pcd, const Scene scene,
+RegistrationResult __ICP_Point2Plane_cuda(PointCloud_cuda &model_pcd, const Scene scene,
                                         const ICPConvergenceCriteria criteria)
 {
     RegistrationResult result;
@@ -84,8 +83,8 @@ RegistrationResult ICP_Point2Plane_cuda(PointCloud_cuda &model_pcd, const Scene 
     // may waste memory, but make it easy to parallel
     thrust::device_vector<float> A_buffer(model_pcd.size()*6, 0);
     thrust::device_vector<float> b_buffer(model_pcd.size(), 0);
-    thrust::device_vector<size_t> valid_buffer(model_pcd.size(), 0);
-    // bool is enough, size_t for risk in reduction
+    thrust::device_vector<uint32_t> valid_buffer(model_pcd.size(), 0);
+    // uint8_t is enough, uint32_t for risk in reduction
 
     thrust::device_vector<float> A_dev(36);
     thrust::device_vector<float> b_dev(6);
@@ -94,13 +93,13 @@ RegistrationResult ICP_Point2Plane_cuda(PointCloud_cuda &model_pcd, const Scene 
     Vec3f* model_pcd_ptr = thrust::raw_pointer_cast(model_pcd.data());
     float* A_buffer_ptr =  thrust::raw_pointer_cast(A_buffer.data());
     float* b_buffer_ptr =  thrust::raw_pointer_cast(b_buffer.data());
-    size_t* valid_buffer_ptr =  thrust::raw_pointer_cast(valid_buffer.data());
+    uint32_t* valid_buffer_ptr =  thrust::raw_pointer_cast(valid_buffer.data());
 
     float* A_dev_ptr =  thrust::raw_pointer_cast(A_dev.data());
     float* b_dev_ptr =  thrust::raw_pointer_cast(b_dev.data());
 
-    const size_t threadsPerBlock = 256;
-    const size_t numBlocks = (model_pcd.size() + threadsPerBlock - 1)/threadsPerBlock;
+    const uint32_t threadsPerBlock = 256;
+    const uint32_t numBlocks = (model_pcd.size() + threadsPerBlock - 1)/threadsPerBlock;
 
     /// cublas ----------------------------------------->
     cublasStatus_t stat;  // CUBLAS functions status
@@ -120,7 +119,7 @@ RegistrationResult ICP_Point2Plane_cuda(PointCloud_cuda &model_pcd, const Scene 
     float* b_host_ptr = b_host.data();
 
     // use one extra turn
-    for(size_t iter=0; iter<= criteria.max_iteration_; iter++){
+    for(uint32_t iter=0; iter<= criteria.max_iteration_; iter++){
 
         get_Ab<<<numBlocks, threadsPerBlock>>>(scene, model_pcd_ptr, model_pcd.size(),
                                                A_buffer_ptr, b_buffer_ptr, valid_buffer_ptr);
@@ -128,7 +127,7 @@ RegistrationResult ICP_Point2Plane_cuda(PointCloud_cuda &model_pcd, const Scene 
         // avoid block all in multi-thread case
         cudaStreamSynchronize(cudaStreamPerThread);
 
-        size_t count = thrust::reduce(thrust::cuda::par.on(cudaStreamPerThread),
+        uint32_t count = thrust::reduce(thrust::cuda::par.on(cudaStreamPerThread),
                                    valid_buffer.begin(), valid_buffer.end());
         float total_error = thrust::transform_reduce(thrust::cuda::par.on(cudaStreamPerThread),
                                                      b_buffer.begin(), b_buffer.end(),
@@ -170,11 +169,16 @@ RegistrationResult ICP_Point2Plane_cuda(PointCloud_cuda &model_pcd, const Scene 
     return result;
 }
 
+RegistrationResult ICP_Point2Plane_cuda(PointCloud_cuda &model_pcd, const Scene_projective scene,
+                                        const ICPConvergenceCriteria criteria){
+    return __ICP_Point2Plane_cuda(model_pcd, scene, criteria);
+}
+
 
 template <class T>
-__global__ void depth2mask(T* depth, size_t* mask, size_t width, size_t height, size_t stride){
-    size_t x = blockIdx.x*blockDim.x + threadIdx.x;
-    size_t y = blockIdx.y*blockDim.y + threadIdx.y;
+__global__ void depth2mask(T* depth, uint32_t* mask, uint32_t width, uint32_t height, uint32_t stride){
+    uint32_t x = blockIdx.x*blockDim.x + threadIdx.x;
+    uint32_t y = blockIdx.y*blockDim.y + threadIdx.y;
     if(x*stride>=width) return;
     if(y*stride>=height) return;
 
@@ -182,14 +186,14 @@ __global__ void depth2mask(T* depth, size_t* mask, size_t width, size_t height, 
 }
 
 template <class T>
-__global__ void depth2cloud(T* depth, Vec3f* pcd, size_t width, size_t height, size_t* scan, Mat3x3f K,
-                          size_t stride, size_t tl_x, size_t tl_y){
-    size_t x = blockIdx.x*blockDim.x + threadIdx.x;
-    size_t y = blockIdx.y*blockDim.y + threadIdx.y;
+__global__ void depth2cloud(T* depth, Vec3f* pcd, uint32_t width, uint32_t height, uint32_t* scan, Mat3x3f K,
+                          uint32_t stride, uint32_t tl_x, uint32_t tl_y){
+    uint32_t x = blockIdx.x*blockDim.x + threadIdx.x;
+    uint32_t y = blockIdx.y*blockDim.y + threadIdx.y;
     if(x*stride>=width) return;
     if(y*stride>=height) return;
-    size_t index_mask = x + y*width;
-    size_t idx_depth = x*stride + y*stride*width;
+    uint32_t index_mask = x + y*width;
+    uint32_t idx_depth = x*stride + y*stride*width;
     if(depth[idx_depth] <= 0) return;
 
     float z_pcd = depth[idx_depth]/1000.0f;
@@ -199,12 +203,12 @@ __global__ void depth2cloud(T* depth, Vec3f* pcd, size_t width, size_t height, s
     pcd[scan[index_mask]] = {x_pcd, y_pcd, z_pcd};
 }
 
-template<class T>
-PointCloud_cuda depth2cloud_cuda(T *depth, size_t width, size_t height, Mat3x3f& K,
-                                 size_t stride, size_t tl_x, size_t tl_y)
+template <class T>
+PointCloud_cuda __depth2cloud_cuda(T *depth, uint32_t width, uint32_t height, Mat3x3f& K,
+                                 uint32_t stride, uint32_t tl_x, uint32_t tl_y)
 {
-    thrust::device_vector<size_t> mask(width*height/stride/stride, 0);
-    size_t* mask_ptr = thrust::raw_pointer_cast(mask.data());
+    thrust::device_vector<uint32_t> mask(width*height/stride/stride, 0);
+    uint32_t* mask_ptr = thrust::raw_pointer_cast(mask.data());
 
     const dim3 threadsPerBlock(16, 16);
     dim3 numBlocks_stride((width/stride + 15)/16, (height/stride + 15)/16);
@@ -214,9 +218,9 @@ PointCloud_cuda depth2cloud_cuda(T *depth, size_t width, size_t height, Mat3x3f&
     cudaStreamSynchronize(cudaStreamPerThread);
 
     // scan to find map: depth idx --> cloud idx
-    size_t mask_back_temp = mask.back();
+    uint32_t mask_back_temp = mask.back();
     thrust::exclusive_scan(mask.begin(), mask.end(), mask.begin(), 0); // in-place scan
-    size_t total_pcd_num = mask.back() + mask_back_temp;
+    uint32_t total_pcd_num = mask.back() + mask_back_temp;
 
     PointCloud_cuda cloud(total_pcd_num);
     Vec3f* cloud_ptr = thrust::raw_pointer_cast(cloud.data());
@@ -227,5 +231,16 @@ PointCloud_cuda depth2cloud_cuda(T *depth, size_t width, size_t height, Mat3x3f&
     return cloud;
 }
 
+PointCloud_cuda depth2cloud_cuda(int32_t *depth, uint32_t width, uint32_t height, Mat3x3f& K,
+                                 uint32_t stride, uint32_t tl_x, uint32_t tl_y){
+    return  __depth2cloud_cuda(depth, width, height, K, stride, tl_x, tl_y);
 }
+PointCloud_cuda depth2cloud_cuda(uint16_t *depth, uint32_t width, uint32_t height, Mat3x3f& K,
+                                 uint32_t stride, uint32_t tl_x, uint32_t tl_y){
+    return  __depth2cloud_cuda(depth, width, height, K, stride, tl_x, tl_y);
+}
+
+}
+
+
 

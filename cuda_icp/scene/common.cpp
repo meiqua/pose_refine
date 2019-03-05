@@ -14,7 +14,14 @@ static void accumBilateral(long delta, long i, long j, long *A, long *b, int thr
     b[1] += fj * delta;
 }
 
-std::vector<Vec3f> get_normal(const cv::Mat& depth, const Mat3x3f& K){
+std::vector<Vec3f> get_normal(const cv::Mat& depth__, const Mat3x3f& K){
+
+    cv::Mat depth;
+    int depth_type = depth__.type();
+    assert(depth_type == CV_16U || depth_type == CV_32S);
+    if(depth_type == CV_32S){
+        depth__.convertTo(depth, CV_16U);
+    }
 
     std::vector<Vec3f> normals;
     normals.resize(depth.rows * depth.cols);

@@ -2,8 +2,8 @@
 #include <Eigen/Core>
 #include <Eigen/Cholesky>
 #include <Eigen/Geometry>
-namespace cuda_icp {
 
+namespace cuda_icp{
 Eigen::Matrix4f TransformVector6dToMatrix4f(const Eigen::Matrix<float, 6, 1> &input) {
     Eigen::Matrix4f output;
     output.setIdentity();
@@ -18,8 +18,8 @@ Eigen::Matrix4f TransformVector6dToMatrix4f(const Eigen::Matrix<float, 6, 1> &in
 
 Mat4x4f eigen_to_custom(const Eigen::Matrix4f& extrinsic){
     Mat4x4f result;
-    for(size_t i=0; i<4; i++){
-        for(size_t j=0; j<4; j++){
+    for(uint32_t i=0; i<4; i++){
+        for(uint32_t j=0; j<4; j++){
             result[i][j] = extrinsic(i, j);
         }
     }
@@ -38,7 +38,7 @@ Mat4x4f eigen_slover_666(float *A, float *b)
 void transform_pcd(PointCloud_cpu& model_pcd, Mat4x4f& trans){
 
 #pragma omp parallel for
-    for(size_t i=0; i < model_pcd.size(); i++){
+    for(uint32_t i=0; i < model_pcd.size(); i++){
         Vec3f& pcd = model_pcd[i];
         float new_x = trans[0][0]*pcd.x + trans[0][1]*pcd.y + trans[0][2]*pcd.z + trans[0][3];
         float new_y = trans[1][0]*pcd.x + trans[1][1]*pcd.y + trans[1][2]*pcd.z + trans[1][3];
@@ -50,7 +50,7 @@ void transform_pcd(PointCloud_cpu& model_pcd, Mat4x4f& trans){
 }
 
 template<class Scene>
-RegistrationResult ICP_Point2Plane_cpu(PointCloud_cpu &model_pcd, const Scene scene,
+RegistrationResult __ICP_Point2Plane_cpu(PointCloud_cpu &model_pcd, const Scene scene,
                                        const ICPConvergenceCriteria criteria)
 {
     RegistrationResult result;
@@ -61,13 +61,13 @@ RegistrationResult ICP_Point2Plane_cpu(PointCloud_cpu &model_pcd, const Scene sc
     Eigen::Matrix<float, Eigen::Dynamic, 6> A_buffer(model_pcd.size(), 6); A_buffer.setZero();
     Eigen::Matrix<float, Eigen::Dynamic, 1> b_buffer(model_pcd.size(), 1); b_buffer.setZero();
 
-    std::vector<size_t> valid_buffer(model_pcd.size(), 0);
+    std::vector<uint32_t> valid_buffer(model_pcd.size(), 0);
 
     // use one extra turn
-    for(size_t iter=0; iter<=criteria.max_iteration_; iter++){
+    for(uint32_t iter=0; iter<=criteria.max_iteration_; iter++){
 
-#pragma omp parallel for
-        for(size_t i = 0; i<model_pcd.size(); i++){
+//#pragma omp parallel for
+        for(uint32_t i = 0; i<model_pcd.size(); i++){
             const auto& src_pcd = model_pcd[i];
 
             Vec3f dst_pcd, dst_normal; bool valid;
@@ -94,10 +94,10 @@ RegistrationResult ICP_Point2Plane_cpu(PointCloud_cpu &model_pcd, const Scene sc
             // so don't need to consider valid_buffer, just multi matrix
         }
 
-        size_t count = 0;
+        uint32_t count = 0;
         float total_error = 0;
-#pragma omp parallel for reduction(+:count, total_error)
-        for(size_t i=0; i<model_pcd.size(); i++){
+//#pragma omp parallel for reduction(+:count, total_error)
+        for(uint32_t i=0; i<model_pcd.size(); i++){
             count += valid_buffer[i];
             total_error += (b_buffer(i)*b_buffer(i));
         }
@@ -127,11 +127,16 @@ RegistrationResult ICP_Point2Plane_cpu(PointCloud_cpu &model_pcd, const Scene sc
     return result;
 }
 
+RegistrationResult ICP_Point2Plane_cpu(PointCloud_cpu &model_pcd, const Scene_projective scene,
+                                       const ICPConvergenceCriteria criteria){
+    return __ICP_Point2Plane_cpu(model_pcd, scene, criteria);
+}
+
 template<class T>
-void cpu_exclusive_scan_serial(T* start, size_t N){
+void cpu_exclusive_scan_serial(T* start, uint32_t N){
     T cache = start[0];
     start[0] = 0;
-    for (size_t i = 1; i < N; i++)
+    for (uint32_t i = 1; i < N; i++)
     {
         T temp = cache + start[i-1];
         cache = start[i];
@@ -140,20 +145,20 @@ void cpu_exclusive_scan_serial(T* start, size_t N){
 }
 
 template<class T>
-PointCloud_cpu depth2cloud_cpu(T *depth, size_t width, size_t height, Mat3x3f& K,
-                                size_t stride, size_t tl_x, size_t tl_y)
+PointCloud_cpu __depth2cloud_cpu(T* depth, uint32_t width, uint32_t height, Mat3x3f& K,
+                                uint32_t stride, uint32_t tl_x, uint32_t tl_y)
 {
-    std::vector<size_t> mask(width*height/stride/stride, 0);
+    std::vector<uint32_t> mask(width*height/stride/stride, 0);
 
 #pragma omp parallel for collapse(2)
-    for(size_t x=0; x<width/stride; x++){
-        for(size_t y=0; y<height/stride; y++){
+    for(uint32_t x=0; x<width/stride; x++){
+        for(uint32_t y=0; y<height/stride; y++){
             if(depth[x*stride + y*stride*width] > 0) mask[x + y*width] = 1;
         }
     }
 
     // scan to find map: depth idx --> cloud idx
-    size_t mask_back_temp = mask.back();
+    uint32_t mask_back_temp = mask.back();
 
     // without cuda this can't be used
 #ifdef CUDA_ON
@@ -162,16 +167,16 @@ PointCloud_cpu depth2cloud_cpu(T *depth, size_t width, size_t height, Mat3x3f& K
 #else
     cpu_exclusive_scan_serial(mask.data(), mask.size());
 #endif
-    size_t total_pcd_num = mask.back() + mask_back_temp;
+    uint32_t total_pcd_num = mask.back() + mask_back_temp;
 
     PointCloud_cpu cloud(total_pcd_num);
 
 #pragma omp parallel for collapse(2)
-    for(size_t x=0; x<width/stride; x++){
-        for(size_t y=0; y<height/stride; y++){
+    for(uint32_t x=0; x<width/stride; x++){
+        for(uint32_t y=0; y<height/stride; y++){
 
-            size_t idx_depth = x*stride + y*stride*width;
-            size_t idx_mask = x + y*width;
+            uint32_t idx_depth = x*stride + y*stride*width;
+            uint32_t idx_mask = x + y*width;
 
             if(depth[idx_depth] <= 0) continue;
 
@@ -184,6 +189,18 @@ PointCloud_cpu depth2cloud_cpu(T *depth, size_t width, size_t height, Mat3x3f& K
     }
     return cloud;
 }
+
+PointCloud_cpu depth2cloud_cpu(int32_t* depth, uint32_t width, uint32_t height, Mat3x3f& K,
+                               uint32_t stride, uint32_t tl_x, uint32_t tl_y){
+    return __depth2cloud_cpu(depth, width, height, K, stride, tl_x, tl_y);
 }
+PointCloud_cpu depth2cloud_cpu(uint16_t* depth, uint32_t width, uint32_t height, Mat3x3f& K,
+                               uint32_t stride, uint32_t tl_x, uint32_t tl_y){
+    return __depth2cloud_cpu(depth, width, height, K, stride, tl_x, tl_y);
+}
+}
+
+
+
 
 

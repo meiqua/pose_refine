@@ -100,6 +100,19 @@ public:
             d2 = pose.at<float>(3, 2); d3 = pose.at<float>(3, 3);
         }
 
+        void init_from_ptr(const float* data){
+            a0 = data[0]; a1 = data[1]; a2 = data[2]; a3 = data[3];
+            b0 = data[4]; b1 = data[5]; b2 = data[6]; b3 = data[7];
+            c0 = data[8]; c1 = data[9]; c2 = data[10]; c3 = data[11];
+            d0 = data[12]; d1 = data[13]; d2 = data[14]; d3 = data[15];
+        }
+
+        void init_from_ptr(const float* R, const float* t){
+            a0 = R[0]; a1 = R[1]; a2 = R[2];  a3 = t[0];
+            b0 = R[3]; b1 = R[4]; b2 = R[5];  b3 = t[1];
+            c0 = R[6]; c1 = R[7]; c2 = R[8];  c3 = t[2];
+        }
+
         void init_from_cv(const cv::Mat& R, const cv::Mat& t){
             assert(R.type() == CV_32F);
             assert(t.type() == CV_32F);

@@ -9,13 +9,26 @@ void Scene_projective::init_Scene_projective_cuda(cv::Mat &scene_depth, Mat3x3f 
     height = height_;
     max_dist_diff = max_dist_diff_;
 
+    int depth_type = scene_depth.type();
+    assert(depth_type == CV_16U || depth_type == CV_32S);
+
     std::vector<Vec3f> pcd_buffer_host(width * height);
     std::vector<Vec3f> normal_buffer_host;
-    for(int r=0; r<height; r++){
-        for(int c=0; c<width; c++){
-            pcd_buffer_host[c + r*width] = dep2pcd(c, r, scene_depth.at<uint16_t>(r, c), K);
+
+    if(depth_type == CV_16U){
+        for(int r=0; r<height; r++){
+            for(int c=0; c<width; c++){
+                pcd_buffer_host[c + r*width] = dep2pcd(c, r, scene_depth.at<uint16_t>(r, c), K);
+            }
+        }
+    }else if(depth_type == CV_32S){
+        for(int r=0; r<height; r++){
+            for(int c=0; c<width; c++){
+                pcd_buffer_host[c + r*width] = dep2pcd(c, r, scene_depth.at<uint32_t>(r, c), K);
+            }
         }
     }
+
     normal_buffer_host = get_normal(scene_depth, K);
 
     pcd_buffer.clear();

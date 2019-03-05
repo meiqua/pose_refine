@@ -164,6 +164,16 @@ public:
     mat() {}
 
     __device__ __host__
+    mat(const T* data) {
+        for(int i=0; i<DimRows; i++){
+            auto& row = rows[i];
+            for(int j=0; j<DimCols; j++){
+                row[j] = data[j + i*DimCols];
+            }
+        }
+    }
+
+    __device__ __host__
     vec<DimCols,T>& operator[] (const size_t idx) {
         assert(idx<DimRows);
         return rows[idx];
