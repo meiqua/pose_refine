@@ -5,7 +5,7 @@
 // no matter it's projective or ANN
 struct Scene_projective{
     size_t width = 640, height = 480;
-    float max_dist_diff = 0.05f; // m
+    float max_dist_diff = 0.1f; // m
     Mat3x3f K;
     Vec3f* pcd_ptr;  // pointer can unify cpu & cuda version
     Vec3f* normal_ptr;  // layout: 1d, width*height length, array of Vec3f

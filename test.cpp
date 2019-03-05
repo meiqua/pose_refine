@@ -13,6 +13,13 @@ using namespace std;
 
 namespace helper {
 
+cv::Rect get_bbox(cv::Mat depth){
+    cv::Mat mask = depth > 0;
+    cv::Mat Points;
+    findNonZero(mask,Points);
+    return boundingRect(Points);
+}
+
 cv::Mat mat4x4f2cv(Mat4x4f& mat4){
     cv::Mat mat_cv(4, 4, CV_32F);
     mat_cv.at<float>(0, 0) = mat4[0][0];mat_cv.at<float>(0, 1) = mat4[0][1];
@@ -174,15 +181,17 @@ int main(int argc, char const *argv[]){
     Mat R_ren = (Mat_<float>(3,3) << 0.34768538, 0.93761126, 0.00000000, 0.70540612,
                  -0.26157897, -0.65877056, -0.61767070, 0.22904489, -0.75234390);
     Mat t_ren = (Mat_<float>(3,1) << 0.0, 0.0, 300.0);
+    Mat t_ren2 = (Mat_<float>(3,1) << 20.0, 20.0, 300.0);
 
     float angle_y = 20.0f/180.0f*3.14f;
     Mat rot_mat = helper::eulerAnglesToRotationMatrix({0.0f, angle_y, 0.0f,});
+    cout << "init angle diff y: " << angle_y*180/3.14f << endl << endl;
 
     Mat R_ren2 = rot_mat * R_ren;
 
     cuda_renderer::Model::mat4x4 mat4, mat4_2;
     mat4.init_from_cv(R_ren, t_ren);
-    mat4_2.init_from_cv(R_ren2, t_ren);
+    mat4_2.init_from_cv(R_ren2, t_ren2);
 
     std::vector<cuda_renderer::Model::mat4x4> mat4_v = {mat4, mat4_2};
 
@@ -193,6 +202,14 @@ int main(int argc, char const *argv[]){
 
     cv::Mat depth_1 = cv::Mat(height, width, CV_32SC1, result_cpu.data());
     cv::Mat depth_2 = cv::Mat(height, width, CV_32SC1, result_cpu.data() + height*width);
+
+    auto bbox1 = helper::get_bbox(depth_1);
+    auto bbox2 = helper::get_bbox(depth_2);
+    cout << "\nbbox:" << endl;
+    cout << "depth 1: " << bbox1 << endl;
+    cout << "depth 2: " << bbox2 << endl;
+    cout << "init pixel diff xy: "
+         << abs(bbox1.x - bbox2.x) << "    " <<  abs(bbox1.y - bbox2.y) << endl;
 
 //    cv::imshow("depth_1", helper::view_dep(depth_1));
 //    cv::imshow("depth_2", helper::view_dep(depth_2));
