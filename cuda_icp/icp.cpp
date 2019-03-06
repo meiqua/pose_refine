@@ -66,7 +66,7 @@ RegistrationResult __ICP_Point2Plane_cpu(std::vector<Vec3f> &model_pcd, const Sc
     // use one extra turn
     for(uint32_t iter=0; iter<=criteria.max_iteration_; iter++){
 
-//#pragma omp parallel for
+#pragma omp parallel for
         for(uint32_t i = 0; i<model_pcd.size(); i++){
             const auto& src_pcd = model_pcd[i];
 
@@ -96,7 +96,7 @@ RegistrationResult __ICP_Point2Plane_cpu(std::vector<Vec3f> &model_pcd, const Sc
 
         uint32_t count = 0;
         float total_error = 0;
-//#pragma omp parallel for reduction(+:count, total_error)
+#pragma omp parallel for reduction(+:count, total_error)
         for(uint32_t i=0; i<model_pcd.size(); i++){
             count += valid_buffer[i];
             total_error += (b_buffer(i)*b_buffer(i));
@@ -118,7 +118,14 @@ RegistrationResult __ICP_Point2Plane_cpu(std::vector<Vec3f> &model_pcd, const Sc
         Eigen::Matrix<float, 6, 6> A = A_buffer.transpose()*A_buffer;
         Eigen::Matrix<float, 6, 1> b = A_buffer.transpose()*b_buffer;
 
+//        std::cout << "~~~~~~~~~~~~~~" << std::endl;
+//        std::cout << A;
+//        std::cout << "~~~~~~~~~~~~~~" << std::endl;
+
         Mat4x4f extrinsic = eigen_slover_666(A.data(), b.data());
+
+//        std::cout << extrinsic;
+
         transform_pcd(model_pcd, extrinsic);
         result.transformation_ = extrinsic * result.transformation_;
     }

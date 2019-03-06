@@ -27,7 +27,7 @@ struct thrust__squre : public thrust::unary_function<T,T>
   }
 };
 
-__global__ void transform_pcd(Vec3f* model_pcd_ptr, uint32_t model_pcd_size, Mat4x4f trans){
+__global__ void transform_pcd_cuda(Vec3f* model_pcd_ptr, uint32_t model_pcd_size, Mat4x4f trans){
     uint32_t i = blockIdx.x*blockDim.x + threadIdx.x;
     if(i >= model_pcd_size) return;
 
@@ -114,8 +114,8 @@ RegistrationResult __ICP_Point2Plane_cuda(device_vector_v3f_holder &model_pcd, c
     cublasSetStream_v2(cublas_handle, cudaStreamPerThread);
     /// cublas <-----------------------------------------
 
-    thrust::host_vector<float> A_host(36);
-    thrust::host_vector<float> b_host(36);
+    thrust::host_vector<float> A_host(36, 0);
+    thrust::host_vector<float> b_host(36, 0);
 
     float* A_host_ptr = A_host.data();
     float* b_host_ptr = b_host.data();
@@ -162,10 +162,16 @@ RegistrationResult __ICP_Point2Plane_cuda(device_vector_v3f_holder &model_pcd, c
                             6, model_pcd.size(), &alpha, A_buffer_ptr, 6, &beta, A_dev_ptr, 6);
         stat = cublasGetMatrix(6, 6, sizeof(float), A_dev_ptr , 6, A_host_ptr, 6);
 
-//        for(int y=0; y<6; y++){
-//            for(int x=y+1; x<6; x++){
-//                A_host[x + y*6] = A_host[y + x*6];
-//            }
+        for(int y=0; y<6; y++){
+            for(int x=0; x<y; x++){
+                A_host[x + y*6] = A_host[y + x*6];
+            }
+        }
+
+//        {
+//            std::cout << " ------------ "<< std::endl;
+//            for(auto f: A_host) std::cout << f << "\n";
+//            std::cout << std::endl;
 //        }
 
         // b = A_buffer.transpose()*b_buffer;
@@ -174,8 +180,9 @@ RegistrationResult __ICP_Point2Plane_cuda(device_vector_v3f_holder &model_pcd, c
         stat = cublasGetVector(6, sizeof(float), b_dev_ptr, 1, b_host_ptr, 1);
 
         Mat4x4f extrinsic = eigen_slover_666(A_host_ptr, b_host_ptr);
+//        std::cout << extrinsic;
 
-        transform_pcd<<<numBlocks, threadsPerBlock>>>(model_pcd_ptr, model_pcd.size(), extrinsic);
+        transform_pcd_cuda<<<numBlocks, threadsPerBlock>>>(model_pcd_ptr, model_pcd.size(), extrinsic);
         cudaStreamSynchronize(cudaStreamPerThread);
 
         result.transformation_ = extrinsic * result.transformation_;
