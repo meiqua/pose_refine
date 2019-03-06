@@ -230,7 +230,7 @@ int main(int argc, char const *argv[]){
     scene.init_Scene_projective_cpu(scene_depth, K_, pcd_buffer, normal_buffer);
 //    helper::view_pcd(pcd_buffer);
 
-    auto result = cuda_icp::ICP_Point2Plane_cpu(pcd1, scene);
+    auto result = cuda_icp::ICP_Point2Plane_cpu(pcd1, scene);  // notice, pcd1 are changed due to icp
     Mat result_cv = helper::mat4x4f2cv(result.transformation_);
     Mat R = result_cv(cv::Rect(0, 0, 3, 3));
 
@@ -255,22 +255,22 @@ int main(int argc, char const *argv[]){
 //    helper::view_pcd(pcd1_host);
 
 
-//    device_vector_v3f_holder pcd_buffer_cuda, normal_buffer_cuda;
-//    scene.init_Scene_projective_cuda(scene_depth, K_, pcd_buffer_cuda, normal_buffer_cuda);
-//    auto result_cuda = cuda_icp::ICP_Point2Plane_cuda(pcd1_cuda, scene);
-//    Mat result_cv_cuda = helper::mat4x4f2cv(result_cuda.transformation_);
-//    cout << "\nresult_cuda: " << endl;
-//    cout << "result fitness: " << result_cuda.fitness_ << endl;
-//    cout << "result mse: " << result_cuda.inlier_rmse_ << endl;
-//    cout << "\nresult_cv_cuda:" << endl;
-//    cout << result_cv_cuda << endl;
+    device_vector_v3f_holder pcd_buffer_cuda, normal_buffer_cuda;
+    scene.init_Scene_projective_cuda(scene_depth, K_, pcd_buffer_cuda, normal_buffer_cuda);
+    auto result_cuda = cuda_icp::ICP_Point2Plane_cuda(pcd1_cuda, scene);
+    Mat result_cv_cuda = helper::mat4x4f2cv(result_cuda.transformation_);
+    cout << "\nresult_cuda: " << endl;
+    cout << "result fitness: " << result_cuda.fitness_ << endl;
+    cout << "result mse: " << result_cuda.inlier_rmse_ << endl;
+    cout << "\nresult_cv_cuda:" << endl;
+    cout << result_cv_cuda << endl;
 
-    auto R_v = helper::rotationMatrixToEulerAngles(R);
+//    auto R_v = helper::rotationMatrixToEulerAngles(R);
 
-    cout << "\nerror in degree:" << endl;
-    cout << "x: " << abs(R_v[0] - angle_x)/3.14f*180  << endl;
-    cout << "y: " << abs(R_v[1] - angle_y)/3.14f*180 << endl;
-    cout << "z: " << abs(R_v[2] - angle_z)/3.14f*180  << endl;
+//    cout << "\nerror in degree:" << endl;
+//    cout << "x: " << abs(R_v[0] - angle_x)/3.14f*180  << endl;
+//    cout << "y: " << abs(R_v[1] - angle_y)/3.14f*180 << endl;
+//    cout << "z: " << abs(R_v[2] - angle_z)/3.14f*180  << endl;
 
     return 0;
 }

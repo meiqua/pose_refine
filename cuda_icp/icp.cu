@@ -1,6 +1,7 @@
 #include "icp.h"
 #include <thrust/transform_reduce.h>
 #include <thrust/functional.h>
+#include <iostream>
 
 // for matrix multi
 #include "cublas_v2.h"
@@ -83,6 +84,7 @@ RegistrationResult __ICP_Point2Plane_cuda(device_vector_v3f_holder &model_pcd, c
     // may waste memory, but make it easy to parallel
     thrust::device_vector<float> A_buffer(model_pcd.size()*6, 0);
     thrust::device_vector<float> b_buffer(model_pcd.size(), 0);
+    thrust::device_vector<float> b_squre_buffer(b_buffer.size());
     thrust::device_vector<uint32_t> valid_buffer(model_pcd.size(), 0);
     // uint8_t is enough, uint32_t for risk in reduction
 
@@ -129,10 +131,18 @@ RegistrationResult __ICP_Point2Plane_cuda(device_vector_v3f_holder &model_pcd, c
 
         uint32_t count = thrust::reduce(thrust::cuda::par.on(cudaStreamPerThread),
                                    valid_buffer.begin(), valid_buffer.end());
-        float total_error = thrust::transform_reduce(thrust::cuda::par.on(cudaStreamPerThread),
-                                                     b_buffer.begin(), b_buffer.end(),
-                                                     thrust__squre<float>(), 0, thrust::plus<float>());
+
+        thrust::transform(thrust::cuda::par.on(cudaStreamPerThread), b_buffer.begin(),
+                          b_buffer.end(), b_squre_buffer.begin(), thrust__squre<float>());
+        float total_error = thrust::reduce(thrust::cuda::par.on(cudaStreamPerThread),
+                                           b_squre_buffer.begin(), b_squre_buffer.end());
+
+        //don't know why, transform reduce always return 0
+//        float total_error = thrust::transform_reduce(thrust::cuda::par.on(cudaStreamPerThread),
+//                                                     b_buffer.begin(), b_buffer.end(),
+//                                                     thrust__squre<float>(), 0, thrust::plus<float>());
         cudaStreamSynchronize(cudaStreamPerThread);
+//        gpuErrchk(cudaPeekAtLastError());
 
         backup = result;
 
@@ -151,6 +161,12 @@ RegistrationResult __ICP_Point2Plane_cuda(device_vector_v3f_holder &model_pcd, c
         stat = cublasSsyrk(cublas_handle, CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_N,
                             6, model_pcd.size(), &alpha, A_buffer_ptr, 6, &beta, A_dev_ptr, 6);
         stat = cublasGetMatrix(6, 6, sizeof(float), A_dev_ptr , 6, A_host_ptr, 6);
+
+//        for(int y=0; y<6; y++){
+//            for(int x=y+1; x<6; x++){
+//                A_host[x + y*6] = A_host[y + x*6];
+//            }
+//        }
 
         // b = A_buffer.transpose()*b_buffer;
         stat = cublasSgemv(cublas_handle, CUBLAS_OP_N, 6, model_pcd.size(), &alpha, A_buffer_ptr,
