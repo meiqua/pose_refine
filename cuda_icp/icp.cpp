@@ -89,6 +89,17 @@ RegistrationResult __ICP_Point2Plane_cpu(std::vector<Vec3f> &model_pcd, const Sc
                 A_buffer(i, 5) = dst_normal.z;
 
                 valid_buffer[i] = 1;
+            }else{
+                b_buffer(i) = 0;
+
+                A_buffer(i, 0) = 0;
+                A_buffer(i, 1) = 0;
+                A_buffer(i, 2) = 0;
+                A_buffer(i, 3) = 0;
+                A_buffer(i, 4) = 0;
+                A_buffer(i, 5) = 0;
+
+                valid_buffer[i] = 0;
             }
             // else: invalid is 0 in A & b, ATA ATb means adding 0,
             // so don't need to consider valid_buffer, just multi matrix
@@ -107,6 +118,14 @@ RegistrationResult __ICP_Point2Plane_cpu(std::vector<Vec3f> &model_pcd, const Sc
         result.fitness_ = float(count) / model_pcd.size();
         result.inlier_rmse_ = std::sqrt(total_error / count);
 
+//        {
+//            std::cout << " --- cpu --- " << iter << " --- cpu ---" << std::endl;
+//            std::cout << "total error: " << total_error << std::endl;
+//            std::cout << "result.fitness_: " << result.fitness_ << std::endl;
+//            std::cout << "result.inlier_rmse_: " << result.inlier_rmse_ << std::endl;
+//            std::cout << " --- cpu --- " << iter << " --- cpu ---" << std::endl << std::endl;
+//        }
+
         // last extra iter, just compute fitness & mse
         if(iter == criteria.max_iteration_) return result;
 
@@ -118,12 +137,15 @@ RegistrationResult __ICP_Point2Plane_cpu(std::vector<Vec3f> &model_pcd, const Sc
         Eigen::Matrix<float, 6, 6> A = A_buffer.transpose()*A_buffer;
         Eigen::Matrix<float, 6, 1> b = A_buffer.transpose()*b_buffer;
 
-//        std::cout << "~~~~~~~~~~~~~~" << std::endl;
+//        std::cout << "~~~~~~~~A~~~~~~" << std::endl;
 //        std::cout << A;
-//        std::cout << "~~~~~~~~~~~~~~" << std::endl;
+//        std::cout << "\n~~~~~~~~~~~~~~\n" << std::endl;
+
+//        std::cout << "~~~~~~~~b~~~~~~" << std::endl;
+//        std::cout << b;
+//        std::cout << "\n~~~~~~~~~~~~~~\n" << std::endl;
 
         Mat4x4f extrinsic = eigen_slover_666(A.data(), b.data());
-
 //        std::cout << extrinsic;
 
         transform_pcd(model_pcd, extrinsic);

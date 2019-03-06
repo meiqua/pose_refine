@@ -1,13 +1,12 @@
 #include "icp.h"
 #include <thrust/transform_reduce.h>
 #include <thrust/functional.h>
-#include <iostream>
 
 // for matrix multi
 #include "cublas_v2.h"
-#define IDX2C(i, j, ld) (((j)*(ld))+(i))
 
 namespace cuda_icp{
+
 #define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
 inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
 {
@@ -68,6 +67,17 @@ __global__ void get_Ab(const Scene scene, Vec3f* model_pcd_ptr, uint32_t model_p
         A_buffer_ptr[i*6 + 5] = dst_normal.z;
 
         valid_buffer_ptr[i] = 1;
+    }else{
+        b_buffer_ptr[i] = 0;
+
+        A_buffer_ptr[i*6 + 0] = 0;
+        A_buffer_ptr[i*6 + 1] = 0;
+        A_buffer_ptr[i*6 + 2] = 0;
+        A_buffer_ptr[i*6 + 3] = 0;
+        A_buffer_ptr[i*6 + 4] = 0;
+        A_buffer_ptr[i*6 + 5] = 0;
+
+        valid_buffer_ptr[i] = 0;
     }
     // else: invalid is 0 in A & b, ATA ATb means adding 0,
     // so don't need to consider valid_buffer, just multi matrix
@@ -94,6 +104,7 @@ RegistrationResult __ICP_Point2Plane_cuda(device_vector_v3f_holder &model_pcd, c
     // cast to pointer, ready to feed kernel
     Vec3f* model_pcd_ptr = model_pcd.data();
     float* A_buffer_ptr =  thrust::raw_pointer_cast(A_buffer.data());
+
     float* b_buffer_ptr =  thrust::raw_pointer_cast(b_buffer.data());
     uint32_t* valid_buffer_ptr =  thrust::raw_pointer_cast(valid_buffer.data());
 
@@ -108,7 +119,7 @@ RegistrationResult __ICP_Point2Plane_cuda(device_vector_v3f_holder &model_pcd, c
     cublasHandle_t cublas_handle;  // CUBLAS context
     stat = cublasCreate(&cublas_handle);
     float alpha =1.0f;  // al =1
-    float beta =1.0f;  // bet =1
+    float beta =0.0f;  // bet =0
 
     // avoid blocking for multi-thread
     cublasSetStream_v2(cublas_handle, cudaStreamPerThread);
@@ -149,6 +160,14 @@ RegistrationResult __ICP_Point2Plane_cuda(device_vector_v3f_holder &model_pcd, c
         result.fitness_ = float(count) / model_pcd.size();
         result.inlier_rmse_ = std::sqrt(total_error / count);
 
+//        {
+//            std::cout << " --- cuda --- " << iter << " --- cuda ---" << std::endl;
+//            std::cout << "total error: " << total_error << std::endl;
+//            std::cout << "result.fitness_: " << result.fitness_ << std::endl;
+//            std::cout << "result.inlier_rmse_: " << result.inlier_rmse_ << std::endl;
+//            std::cout << " --- cuda --- " << iter << " --- cuda ---" << std::endl << std::endl;
+//        }
+
         // last extra iter, just compute fitness & mse
         if(iter == criteria.max_iteration_) return result;
 
@@ -162,6 +181,7 @@ RegistrationResult __ICP_Point2Plane_cuda(device_vector_v3f_holder &model_pcd, c
                             6, model_pcd.size(), &alpha, A_buffer_ptr, 6, &beta, A_dev_ptr, 6);
         stat = cublasGetMatrix(6, 6, sizeof(float), A_dev_ptr , 6, A_host_ptr, 6);
 
+        // set upper part of ATA
         for(int y=0; y<6; y++){
             for(int x=0; x<y; x++){
                 A_host[x + y*6] = A_host[y + x*6];
@@ -169,15 +189,29 @@ RegistrationResult __ICP_Point2Plane_cuda(device_vector_v3f_holder &model_pcd, c
         }
 
 //        {
-//            std::cout << " ------------ "<< std::endl;
-//            for(auto f: A_host) std::cout << f << "\n";
-//            std::cout << std::endl;
+//            std::cout << " -----A------- "<< std::endl;
+//            for(int i=0; i<6; i++){
+//                for(int j=0; j<6; j++){
+//                    std::cout << A_host[j + i*6] << "  ";
+//                }
+//                std::cout << "\n";
+//            }
+//            std::cout << " ------------\n "<< std::endl;
 //        }
 
         // b = A_buffer.transpose()*b_buffer;
         stat = cublasSgemv(cublas_handle, CUBLAS_OP_N, 6, model_pcd.size(), &alpha, A_buffer_ptr,
                           6, b_buffer_ptr, 1, &beta, b_dev_ptr, 1);
         stat = cublasGetVector(6, sizeof(float), b_dev_ptr, 1, b_host_ptr, 1);
+
+//        {
+//            std::cout << " -----b------- "<< std::endl;
+//            for(int j=0; j<6; j++){
+//                std::cout << b_host[j] << "  ";
+//            }
+//                std::cout << "\n";
+//            std::cout << " ------------\n "<< std::endl;
+//        }
 
         Mat4x4f extrinsic = eigen_slover_666(A_host_ptr, b_host_ptr);
 //        std::cout << extrinsic;

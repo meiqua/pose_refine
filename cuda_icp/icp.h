@@ -8,8 +8,6 @@
 
 namespace cuda_icp {
 
-
-
 // use custom mat/vec here, otherwise we have to mix eigen with cuda
 // then we may face some error due to eigen vesrion
 //class defination refer to open3d
@@ -30,7 +28,7 @@ struct ICPConvergenceCriteria
 public:
     __device__ __host__
     ICPConvergenceCriteria(float relative_fitness = 1e-6f,
-            float relative_rmse = 1e-6f, int max_iteration = 1) :
+            float relative_rmse = 1e-6f, int max_iteration = 30) :
             relative_fitness_(relative_fitness), relative_rmse_(relative_rmse),
             max_iteration_(max_iteration) {}
 

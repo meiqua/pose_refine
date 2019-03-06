@@ -181,7 +181,7 @@ int main(int argc, char const *argv[]){
     Mat R_ren = (Mat_<float>(3,3) << 0.34768538, 0.93761126, 0.00000000, 0.70540612,
                  -0.26157897, -0.65877056, -0.61767070, 0.22904489, -0.75234390);
     Mat t_ren = (Mat_<float>(3,1) << 0.0, 0.0, 300.0);
-    Mat t_ren2 = (Mat_<float>(3,1) << 30.0, 30.0, 330.0);
+    Mat t_ren2 = (Mat_<float>(3,1) << 10.0, 10.0, 310.0);
 
     float angle_y = 10.0f/180.0f*3.14f;
     float angle_z = angle_y;
@@ -211,7 +211,7 @@ int main(int argc, char const *argv[]){
     cout << "depth 1: " << bbox1 << endl;
     cout << "depth 2: " << bbox2 << endl;
     cout << "init pixel diff xy: "
-         << abs(bbox1.x - bbox2.x) << "----" <<  abs(bbox1.y - bbox2.y) << endl;
+         << abs(bbox1.x - bbox2.x) << "----" <<  abs(bbox1.y - bbox2.y) << endl << endl;
 
 //    cv::imshow("depth_1", helper::view_dep(depth_1));
 //    cv::imshow("depth_2", helper::view_dep(depth_2));
@@ -233,12 +233,7 @@ int main(int argc, char const *argv[]){
     auto result = cuda_icp::ICP_Point2Plane_cpu(pcd1, scene);  // notice, pcd1 are changed due to icp
     Mat result_cv = helper::mat4x4f2cv(result.transformation_);
     Mat R = result_cv(cv::Rect(0, 0, 3, 3));
-
-    cout << "\nresult: " << endl;
-    cout << "result fitness: " << result.fitness_ << endl;
-    cout << "result mse: " << result.inlier_rmse_ << endl;
-    cout << "\nresult_cv:" << endl;
-    cout << result_cv << endl;
+    auto R_v = helper::rotationMatrixToEulerAngles(R);
 
     auto depth_cuda = cuda_renderer::render_cuda_keep_in_gpu(model.tris, mat4_v, width, height, proj);
 // view gpu depth
@@ -259,13 +254,19 @@ int main(int argc, char const *argv[]){
     scene.init_Scene_projective_cuda(scene_depth, K_, pcd_buffer_cuda, normal_buffer_cuda);
     auto result_cuda = cuda_icp::ICP_Point2Plane_cuda(pcd1_cuda, scene);
     Mat result_cv_cuda = helper::mat4x4f2cv(result_cuda.transformation_);
+
+
+    cout << "\nresult: " << endl;
+    cout << "result fitness: " << result.fitness_ << endl;
+    cout << "result mse: " << result.inlier_rmse_ << endl;
+    cout << "\nresult_cv:" << endl;
+    cout << result_cv << endl;
+
     cout << "\nresult_cuda: " << endl;
     cout << "result fitness: " << result_cuda.fitness_ << endl;
     cout << "result mse: " << result_cuda.inlier_rmse_ << endl;
     cout << "\nresult_cv_cuda:" << endl;
     cout << result_cv_cuda << endl;
-
-//    auto R_v = helper::rotationMatrixToEulerAngles(R);
 
 //    cout << "\nerror in degree:" << endl;
 //    cout << "x: " << abs(R_v[0] - angle_x)/3.14f*180  << endl;
