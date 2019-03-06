@@ -1,8 +1,8 @@
 #include "depth_scene.h"
 
 void Scene_projective::init_Scene_projective_cuda(cv::Mat &scene_depth, Mat3x3f &scene_K,
-                                                  thrust::device_vector<Vec3f> &pcd_buffer,
-                                                  thrust::device_vector<Vec3f> &normal_buffer,
+                                                  device_vector_v3f_holder &pcd_buffer,
+                                                  device_vector_v3f_holder &normal_buffer,
                                                   size_t width_, size_t height_, float max_dist_diff_){
     K = scene_K;
     width = width_;
@@ -31,10 +31,12 @@ void Scene_projective::init_Scene_projective_cuda(cv::Mat &scene_depth, Mat3x3f 
 
     normal_buffer_host = get_normal(scene_depth, K);
 
-    pcd_buffer.clear();
-    pcd_buffer = pcd_buffer_host;
-    normal_buffer = normal_buffer_host;
+    pcd_buffer.__malloc(pcd_buffer_host.size());
+    thrust::copy(pcd_buffer_host.begin(), pcd_buffer_host.end(), pcd_buffer.begin_thr());
 
-    pcd_ptr = thrust::raw_pointer_cast(pcd_buffer.data());
-    normal_ptr = thrust::raw_pointer_cast(normal_buffer.data());
+    normal_buffer.__malloc(normal_buffer_host.size());
+    thrust::copy(normal_buffer_host.begin(), normal_buffer_host.end(), normal_buffer.begin_thr());
+
+    pcd_ptr = pcd_buffer.data();
+    normal_ptr = normal_buffer.data();
 }

@@ -171,7 +171,7 @@ static std::string prefix = "/home/meiqua/patch_linemod/public/datasets/hinterst
 
 int main(int argc, char const *argv[]){
 
-    const int width = 640; const int height = 480;
+    int width = 640; int height = 480;
 
     cuda_renderer::Model model(prefix+"models/obj_06.ply");
 
@@ -181,10 +181,12 @@ int main(int argc, char const *argv[]){
     Mat R_ren = (Mat_<float>(3,3) << 0.34768538, 0.93761126, 0.00000000, 0.70540612,
                  -0.26157897, -0.65877056, -0.61767070, 0.22904489, -0.75234390);
     Mat t_ren = (Mat_<float>(3,1) << 0.0, 0.0, 300.0);
-    Mat t_ren2 = (Mat_<float>(3,1) << 20.0, 20.0, 300.0);
+    Mat t_ren2 = (Mat_<float>(3,1) << 30.0, 30.0, 330.0);
 
-    float angle_y = 20.0f/180.0f*3.14f;
-    Mat rot_mat = helper::eulerAnglesToRotationMatrix({0.0f, angle_y, 0.0f,});
+    float angle_y = 10.0f/180.0f*3.14f;
+    float angle_z = angle_y;
+    float angle_x = angle_y;
+    Mat rot_mat = helper::eulerAnglesToRotationMatrix({angle_x, angle_y, angle_z,});
     cout << "init angle diff y: " << angle_y*180/3.14f << endl << endl;
 
     Mat R_ren2 = rot_mat * R_ren;
@@ -197,11 +199,11 @@ int main(int argc, char const *argv[]){
 
     helper::Timer timer;
 
-    std::vector<int> result_cpu = cuda_renderer::render_cpu(model.tris, mat4_v, width, height, proj);
+    std::vector<int> depth_cpu = cuda_renderer::render_cpu(model.tris, mat4_v, width, height, proj);
     timer.out("cpu render");
 
-    cv::Mat depth_1 = cv::Mat(height, width, CV_32SC1, result_cpu.data());
-    cv::Mat depth_2 = cv::Mat(height, width, CV_32SC1, result_cpu.data() + height*width);
+    cv::Mat depth_1 = cv::Mat(height, width, CV_32SC1, depth_cpu.data());
+    cv::Mat depth_2 = cv::Mat(height, width, CV_32SC1, depth_cpu.data() + height*width);
 
     auto bbox1 = helper::get_bbox(depth_1);
     auto bbox2 = helper::get_bbox(depth_2);
@@ -219,10 +221,10 @@ int main(int argc, char const *argv[]){
 //    cout << K << endl;
 //    cout << K_ << endl;
 
-    cuda_icp::PointCloud_cpu pcd1 = cuda_icp::depth2cloud_cpu(result_cpu.data(), width, height, K_);
+    std::vector<::Vec3f> pcd1 = cuda_icp::depth2cloud_cpu(depth_cpu.data(), width, height, K_);
 //    helper::view_pcd(pcd1);
 
-    cv::Mat scene_depth(height, width, CV_32S, result_cpu.data() + width*height);
+    cv::Mat scene_depth(height, width, CV_32S, depth_cpu.data() + width*height);
     Scene_projective scene;
     vector<::Vec3f> pcd_buffer, normal_buffer;
     scene.init_Scene_projective_cpu(scene_depth, K_, pcd_buffer, normal_buffer);
@@ -235,15 +237,40 @@ int main(int argc, char const *argv[]){
     cout << "\nresult: " << endl;
     cout << "result fitness: " << result.fitness_ << endl;
     cout << "result mse: " << result.inlier_rmse_ << endl;
-
     cout << "\nresult_cv:" << endl;
     cout << result_cv << endl;
+
+    auto depth_cuda = cuda_renderer::render_cuda_keep_in_gpu(model.tris, mat4_v, width, height, proj);
+// view gpu depth
+//    vector<int> depth_host(depth_cuda.size());
+//    thrust::copy(depth_cuda.begin_thr(), depth_cuda.end_thr(), depth_host.begin());
+//    cv::Mat depth_1_cuda = cv::Mat(height, width, CV_32SC1, depth_host.data());
+//    imshow("depth 1 cuda", helper::view_dep(depth_1_cuda));
+//    waitKey(0);
+
+    auto pcd1_cuda = cuda_icp::depth2cloud_cuda(depth_cuda.data(), width, height, K_);
+// view gpu pcd
+//    std::vector<::Vec3f> pcd1_host(pcd1_cuda.size());
+//    thrust::copy(pcd1_cuda.begin_thr(), pcd1_cuda.end_thr(), pcd1_host.begin());
+//    helper::view_pcd(pcd1_host);
+
+
+//    device_vector_v3f_holder pcd_buffer_cuda, normal_buffer_cuda;
+//    scene.init_Scene_projective_cuda(scene_depth, K_, pcd_buffer_cuda, normal_buffer_cuda);
+//    auto result_cuda = cuda_icp::ICP_Point2Plane_cuda(pcd1_cuda, scene);
+//    Mat result_cv_cuda = helper::mat4x4f2cv(result_cuda.transformation_);
+//    cout << "\nresult_cuda: " << endl;
+//    cout << "result fitness: " << result_cuda.fitness_ << endl;
+//    cout << "result mse: " << result_cuda.inlier_rmse_ << endl;
+//    cout << "\nresult_cv_cuda:" << endl;
+//    cout << result_cv_cuda << endl;
+
     auto R_v = helper::rotationMatrixToEulerAngles(R);
 
     cout << "\nerror in degree:" << endl;
-    cout << "x: " << abs(R_v[0])/3.14f*180  << endl;
+    cout << "x: " << abs(R_v[0] - angle_x)/3.14f*180  << endl;
     cout << "y: " << abs(R_v[1] - angle_y)/3.14f*180 << endl;
-    cout << "z: " << abs(R_v[2])/3.14f*180  << endl;
+    cout << "z: " << abs(R_v[2] - angle_z)/3.14f*180  << endl;
 
     return 0;
 }

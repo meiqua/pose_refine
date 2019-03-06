@@ -8,6 +8,8 @@
 
 namespace cuda_icp {
 
+
+
 // use custom mat/vec here, otherwise we have to mix eigen with cuda
 // then we may face some error due to eigen vesrion
 //class defination refer to open3d
@@ -41,9 +43,8 @@ public:
 // in this way we can avoid eigen mixed with cuda
 Mat4x4f eigen_slover_666(float* A, float* b);
 
-typedef std::vector<Vec3f> PointCloud_cpu;
 //template <class Scene>
-RegistrationResult ICP_Point2Plane_cpu(PointCloud_cpu& model_pcd,
+RegistrationResult ICP_Point2Plane_cpu(std::vector<Vec3f>& model_pcd,
         const Scene_projective scene,
         const ICPConvergenceCriteria criteria = ICPConvergenceCriteria());
 
@@ -52,15 +53,14 @@ RegistrationResult ICP_Point2Plane_cpu(PointCloud_cpu& model_pcd,
 
 //avoid template in headers
 //template <class T>
-PointCloud_cpu depth2cloud_cpu(int32_t* depth, uint32_t width, uint32_t height, Mat3x3f& K, uint32_t stride = 1,
+std::vector<Vec3f> depth2cloud_cpu(int32_t* depth, uint32_t width, uint32_t height, Mat3x3f& K, uint32_t stride = 1,
                                uint32_t tl_x = 0, uint32_t tl_y = 0);
-PointCloud_cpu depth2cloud_cpu(uint16_t* depth, uint32_t width, uint32_t height, Mat3x3f& K, uint32_t stride = 1,
+std::vector<Vec3f> depth2cloud_cpu(uint16_t* depth, uint32_t width, uint32_t height, Mat3x3f& K, uint32_t stride = 1,
                                uint32_t tl_x = 0, uint32_t tl_y = 0);
 
 #ifdef CUDA_ON
-typedef thrust::device_vector<Vec3f> PointCloud_cuda;
 //template <class Scene>
-RegistrationResult ICP_Point2Plane_cuda(PointCloud_cuda& model_pcd,
+RegistrationResult ICP_Point2Plane_cuda(device_vector_v3f_holder& model_pcd,
         const Scene_projective scene,
         const ICPConvergenceCriteria criteria = ICPConvergenceCriteria());
 
@@ -69,9 +69,9 @@ RegistrationResult ICP_Point2Plane_cuda(PointCloud_cuda& model_pcd,
 
 // avoid use template in header
 //template <class T>
-PointCloud_cuda depth2cloud_cuda(int32_t* depth, uint32_t width, uint32_t height, Mat3x3f& K, uint32_t stride = 1,
-                                uint32_t tl_x = 0, uint32_t tl_y = 0);
-PointCloud_cuda depth2cloud_cuda(uint16_t* depth, uint32_t width, uint32_t height, Mat3x3f& K, uint32_t stride = 1,
+device_vector_v3f_holder depth2cloud_cuda(int32_t* depth, uint32_t width, uint32_t height, Mat3x3f& K, uint32_t stride = 1,
+                     uint32_t tl_x = 0, uint32_t tl_y = 0);
+device_vector_v3f_holder depth2cloud_cuda(uint16_t* depth, uint32_t width, uint32_t height, Mat3x3f& K, uint32_t stride = 1,
                                 uint32_t tl_x = 0, uint32_t tl_y = 0);
 #endif
 }

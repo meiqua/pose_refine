@@ -73,7 +73,7 @@ __global__ void get_Ab(const Scene scene, Vec3f* model_pcd_ptr, uint32_t model_p
 }
 
 template<class Scene>
-RegistrationResult __ICP_Point2Plane_cuda(PointCloud_cuda &model_pcd, const Scene scene,
+RegistrationResult __ICP_Point2Plane_cuda(device_vector_v3f_holder &model_pcd, const Scene scene,
                                         const ICPConvergenceCriteria criteria)
 {
     RegistrationResult result;
@@ -90,7 +90,7 @@ RegistrationResult __ICP_Point2Plane_cuda(PointCloud_cuda &model_pcd, const Scen
     thrust::device_vector<float> b_dev(6);
 
     // cast to pointer, ready to feed kernel
-    Vec3f* model_pcd_ptr = thrust::raw_pointer_cast(model_pcd.data());
+    Vec3f* model_pcd_ptr = model_pcd.data();
     float* A_buffer_ptr =  thrust::raw_pointer_cast(A_buffer.data());
     float* b_buffer_ptr =  thrust::raw_pointer_cast(b_buffer.data());
     uint32_t* valid_buffer_ptr =  thrust::raw_pointer_cast(valid_buffer.data());
@@ -169,7 +169,7 @@ RegistrationResult __ICP_Point2Plane_cuda(PointCloud_cuda &model_pcd, const Scen
     return result;
 }
 
-RegistrationResult ICP_Point2Plane_cuda(PointCloud_cuda &model_pcd, const Scene_projective scene,
+RegistrationResult ICP_Point2Plane_cuda(device_vector_v3f_holder &model_pcd, const Scene_projective scene,
                                         const ICPConvergenceCriteria criteria){
     return __ICP_Point2Plane_cuda(model_pcd, scene, criteria);
 }
@@ -204,7 +204,7 @@ __global__ void depth2cloud(T* depth, Vec3f* pcd, uint32_t width, uint32_t heigh
 }
 
 template <class T>
-PointCloud_cuda __depth2cloud_cuda(T *depth, uint32_t width, uint32_t height, Mat3x3f& K,
+device_vector_v3f_holder __depth2cloud_cuda(T *depth, uint32_t width, uint32_t height, Mat3x3f& K,
                                  uint32_t stride, uint32_t tl_x, uint32_t tl_y)
 {
     thrust::device_vector<uint32_t> mask(width*height/stride/stride, 0);
@@ -216,26 +216,30 @@ PointCloud_cuda __depth2cloud_cuda(T *depth, uint32_t width, uint32_t height, Ma
 
     // avoid blocking per-thread streams
     cudaStreamSynchronize(cudaStreamPerThread);
+//            gpuErrchk(cudaPeekAtLastError());
 
     // scan to find map: depth idx --> cloud idx
     uint32_t mask_back_temp = mask.back();
     thrust::exclusive_scan(mask.begin(), mask.end(), mask.begin(), 0); // in-place scan
     uint32_t total_pcd_num = mask.back() + mask_back_temp;
 
-    PointCloud_cuda cloud(total_pcd_num);
-    Vec3f* cloud_ptr = thrust::raw_pointer_cast(cloud.data());
+    device_vector_v3f_holder cloud(total_pcd_num);
+    Vec3f* cloud_ptr = cloud.data();
+//    gpuErrchk(cudaPeekAtLastError());
 
     depth2cloud<<< numBlocks_stride, threadsPerBlock>>>(depth, cloud_ptr, width, height,
                                                  mask_ptr, K, stride, tl_x, tl_y);
     cudaStreamSynchronize(cudaStreamPerThread);
+//            gpuErrchk(cudaPeekAtLastError());
+
     return cloud;
 }
 
-PointCloud_cuda depth2cloud_cuda(int32_t *depth, uint32_t width, uint32_t height, Mat3x3f& K,
+device_vector_v3f_holder depth2cloud_cuda(int32_t *depth, uint32_t width, uint32_t height, Mat3x3f& K,
                                  uint32_t stride, uint32_t tl_x, uint32_t tl_y){
     return  __depth2cloud_cuda(depth, width, height, K, stride, tl_x, tl_y);
 }
-PointCloud_cuda depth2cloud_cuda(uint16_t *depth, uint32_t width, uint32_t height, Mat3x3f& K,
+device_vector_v3f_holder depth2cloud_cuda(uint16_t *depth, uint32_t width, uint32_t height, Mat3x3f& K,
                                  uint32_t stride, uint32_t tl_x, uint32_t tl_y){
     return  __depth2cloud_cuda(depth, width, height, K, stride, tl_x, tl_y);
 }

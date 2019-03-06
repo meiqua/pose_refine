@@ -82,12 +82,12 @@ int main(int argc, char const *argv[])
         std::vector<int> result_gpu = cuda_renderer::render_cuda(model.tris, mat4_v, width, height, proj);
         timer.out("gpu render");
 
-        thrust::device_vector<int> result_gpu_keep_in =
+        auto result_gpu_keep_in =
                 cuda_renderer::render_cuda_keep_in_gpu(model.tris, mat4_v, width, height, proj);
         timer.out("gpu_keep_in render");
 
         std::vector<int> result_gpu_back_to_host(result_gpu_keep_in.size());
-        thrust::copy(result_gpu_keep_in.begin(), result_gpu_keep_in.end(), result_gpu_back_to_host.begin());
+        thrust::copy(result_gpu_keep_in.begin_thr(), result_gpu_keep_in.end_thr(), result_gpu_back_to_host.begin());
         timer.out("gpu_keep_in back to host");
 
         // gpu cpu check
@@ -127,12 +127,12 @@ int main(int argc, char const *argv[])
         std::vector<int> result_gpu = cuda_renderer::render_cuda(model.tris, mat4_v, width, height, proj, roi);
         timer.out("gpu roi render");
 
-        thrust::device_vector<int> result_gpu_keep_in =
+        auto result_gpu_keep_in =
                 cuda_renderer::render_cuda_keep_in_gpu(model.tris, mat4_v, width, height, proj, roi);
         timer.out("gpu_keep_in roi render");
 
         std::vector<int> result_gpu_back_to_host(result_gpu_keep_in.size());
-        thrust::copy(result_gpu_keep_in.begin(), result_gpu_keep_in.end(), result_gpu_back_to_host.begin());
+        thrust::copy(result_gpu_keep_in.begin_thr(), result_gpu_keep_in.end_thr(), result_gpu_back_to_host.begin());
         timer.out("gpu_keep_in roi back to host");
 
         std::vector<int> result_diff(result_cpu.size());

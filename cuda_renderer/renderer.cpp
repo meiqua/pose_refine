@@ -286,3 +286,5 @@ std::vector<int32_t> cuda_renderer::render_cpu(const std::vector<cuda_renderer::
 
     return depth;
 }
+
+

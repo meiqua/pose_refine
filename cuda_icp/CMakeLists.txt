@@ -8,7 +8,7 @@ list(APPEND icp_lib ${OpenCV_LIBS})
 if(USE_CUDA)
 # cuda
 find_package(CUDA REQUIRED)
-set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} -std=c++11 -O3 --default-stream per-thread -Xcompiler -fopenmp")
+set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} -std=c++11 -O0 --default-stream per-thread -Xcompiler -fopenmp")
 list(APPEND icp_inc ${CUDA_INCLUDE_DIRS})
 list(APPEND icp_lib ${CUDA_LIBRARIES} ${CUDA_CUBLAS_LIBRARIES})
 endif()
@@ -20,7 +20,7 @@ include_directories(${EIGEN3_INCLUDE_DIR})
 
 
 # src
-SET(icp_cuda_srcs icp.cu scene/depth_scene/depth_scene.cu)
+SET(icp_cuda_srcs  icp.cu scene/common.cu scene/depth_scene/depth_scene.cu)
 SET(icp_srcs icp.cpp scene/common.cpp scene/depth_scene/depth_scene.cpp)
 
 
@@ -31,7 +31,7 @@ endif()
 # lib & test exe
 add_library(cuda_icp
                ${icp_srcs}
-               ${icp_cuda_srcs} 
+               ${icp_cuda_srcs}
                ${icp_cuda_objs} 
 )
 target_include_directories(cuda_icp PUBLIC ${icp_inc})

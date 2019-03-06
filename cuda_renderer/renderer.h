@@ -145,6 +145,30 @@ public:
     void get_bounding_box(aiVector3D& min, aiVector3D& max) const;
 };
 
+// thrust device vector can't be used in cpp by design
+class device_vector_int_holder{
+public:
+    int* __gpu_memory;
+    size_t __size;
+    bool valid = false;
+    device_vector_int_holder(){}
+    device_vector_int_holder(size_t size);
+    device_vector_int_holder(size_t size, int init);
+    ~device_vector_int_holder();
+
+    int* data(){return __gpu_memory;}
+    thrust::device_ptr<int> data_thr(){return thrust::device_ptr<int>(__gpu_memory);}
+    int* begin(){return __gpu_memory;}
+    thrust::device_ptr<int> begin_thr(){return thrust::device_ptr<int>(__gpu_memory);}
+    int* end(){return __gpu_memory + __size;}
+    thrust::device_ptr<int> end_thr(){return thrust::device_ptr<int>(__gpu_memory + __size);}
+
+    size_t size(){return __size;}
+
+    void __malloc(size_t size);
+    void __free();
+};
+
 std::vector<Model::mat4x4> mat_to_compact_4x4(const std::vector<cv::Mat>& poses);
 Model::mat4x4 compute_proj(const cv::Mat& K, int width, int height, float near=10, float far=10000);
 
@@ -159,7 +183,7 @@ std::vector<int32_t> render_cuda(const std::vector<Model::Triangle>& tris,const 
                             size_t width, size_t height, const Model::mat4x4& proj_mat,
                                  const Model::ROI roi= {0, 0, 0, 0});
 
-thrust::device_vector<int32_t> render_cuda_keep_in_gpu(const std::vector<Model::Triangle>& tris,const std::vector<Model::mat4x4>& poses,
+device_vector_int_holder render_cuda_keep_in_gpu(const std::vector<Model::Triangle>& tris,const std::vector<Model::mat4x4>& poses,
                             size_t width, size_t height, const Model::mat4x4& proj_mat,
                                                        const Model::ROI roi= {0, 0, 0, 0});
 #endif
