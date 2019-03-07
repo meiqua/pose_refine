@@ -249,7 +249,8 @@ void test_cuda_icp(){
     Scene_projective scene;
     vector<::Vec3f> pcd_buffer, normal_buffer;
     scene.init_Scene_projective_cpu(scene_depth, K_, pcd_buffer, normal_buffer);
-//    helper::view_pcd(pcd_buffer);
+    //view init cloud; the far point is 0 in scene
+//    helper::view_pcd(pcd1, pcd_buffer);
 
     auto result = cuda_icp::ICP_Point2Plane_cpu(pcd1, scene);  // notice, pcd1 are changed due to icp
     Mat result_cv = helper::mat4x4f2cv(result.transformation_);
@@ -257,7 +258,7 @@ void test_cuda_icp(){
     auto R_v = helper::rotationMatrixToEulerAngles(R);
 
     //view icp cloud
-    helper::view_pcd(pcd_buffer, pcd1);
+//    helper::view_pcd(pcd_buffer, pcd1);
 
     auto depth_cuda = cuda_renderer::render_cuda_keep_in_gpu(model.tris, mat4_v, width, height, proj);
 // view gpu depth
