@@ -115,6 +115,8 @@ RegistrationResult __ICP_Point2Plane_cpu(std::vector<Vec3f> &model_pcd, const Sc
 
         backup = result;
 
+        if(count == 0) return result;  // avoid divid 0
+
         result.fitness_ = float(count) / model_pcd.size();
         result.inlier_rmse_ = std::sqrt(total_error / count);
 
@@ -146,7 +148,12 @@ RegistrationResult __ICP_Point2Plane_cpu(std::vector<Vec3f> &model_pcd, const Sc
 //        std::cout << "\n~~~~~~~~~~~~~~\n" << std::endl;
 
         Mat4x4f extrinsic = eigen_slover_666(A.data(), b.data());
+
+//        std::cout << "~~extrinsic~~~~" << std::endl;
 //        std::cout << extrinsic;
+//        std::cout << "\n~~~~~~~~~~~~~~\n" << std::endl;
+
+
 
         transform_pcd(model_pcd, extrinsic);
         result.transformation_ = extrinsic * result.transformation_;

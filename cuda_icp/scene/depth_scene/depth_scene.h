@@ -28,6 +28,12 @@ struct Scene_projective{
     __device__ __host__
     void query(const Vec3f& src_pcd, Vec3f& dst_pcd, Vec3f& dst_normal, bool& valid) const {
         Vec3i x_y_dep = pcd2dep(src_pcd, K);
+
+        if(x_y_dep.x >= width || x_y_dep.y >= height){
+            valid = false;
+            return;
+        }
+
         size_t idx = x_y_dep.x + x_y_dep.y * width;
         dst_pcd = pcd_ptr[idx];
 

@@ -181,7 +181,7 @@ int main(int argc, char const *argv[]){
     Mat R_ren = (Mat_<float>(3,3) << 0.34768538, 0.93761126, 0.00000000, 0.70540612,
                  -0.26157897, -0.65877056, -0.61767070, 0.22904489, -0.75234390);
     Mat t_ren = (Mat_<float>(3,1) << 0.0, 0.0, 300.0);
-    Mat t_ren2 = (Mat_<float>(3,1) << 10.0, 10.0, 310.0);
+    Mat t_ren2 = (Mat_<float>(3,1) << 20.0, 20.0, 320.0);
 
     float angle_y = 10.0f/180.0f*3.14f;
     float angle_z = angle_y;
@@ -268,10 +268,10 @@ int main(int argc, char const *argv[]){
     cout << "\nresult_cv_cuda:" << endl;
     cout << result_cv_cuda << endl;
 
-//    cout << "\nerror in degree:" << endl;
-//    cout << "x: " << abs(R_v[0] - angle_x)/3.14f*180  << endl;
-//    cout << "y: " << abs(R_v[1] - angle_y)/3.14f*180 << endl;
-//    cout << "z: " << abs(R_v[2] - angle_z)/3.14f*180  << endl;
+    cout << "\nerror in degree:" << endl;
+    cout << "x: " << abs(R_v[0] - angle_x)/3.14f*180  << endl;
+    cout << "y: " << abs(R_v[1] - angle_y)/3.14f*180 << endl;
+    cout << "z: " << abs(R_v[2] - angle_z)/3.14f*180  << endl;
 
     return 0;
 }

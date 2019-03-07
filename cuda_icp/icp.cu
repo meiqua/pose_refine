@@ -118,8 +118,8 @@ RegistrationResult __ICP_Point2Plane_cuda(device_vector_v3f_holder &model_pcd, c
     cublasStatus_t stat;  // CUBLAS functions status
     cublasHandle_t cublas_handle;  // CUBLAS context
     stat = cublasCreate(&cublas_handle);
-    float alpha =1.0f;  // al =1
-    float beta =0.0f;  // bet =0
+    float alpha =1.0f;
+    float beta =0.0f;
 
     // avoid blocking for multi-thread
     cublasSetStream_v2(cublas_handle, cudaStreamPerThread);
@@ -130,6 +130,13 @@ RegistrationResult __ICP_Point2Plane_cuda(device_vector_v3f_holder &model_pcd, c
 
     float* A_host_ptr = A_host.data();
     float* b_host_ptr = b_host.data();
+
+//#define USE_GEMM_rather_than_SYRK
+
+#ifdef USE_GEMM_rather_than_SYRK
+    thrust::device_vector<float> AT_buffer(model_pcd.size()*6, 0);
+    float* AT_buffer_ptr =  thrust::raw_pointer_cast(AT_buffer.data());
+#endif
 
     // use one extra turn
     for(uint32_t iter=0; iter<= criteria.max_iteration_; iter++){
@@ -157,6 +164,8 @@ RegistrationResult __ICP_Point2Plane_cuda(device_vector_v3f_holder &model_pcd, c
 
         backup = result;
 
+        if(count == 0) return result;  // avoid divid 0
+
         result.fitness_ = float(count) / model_pcd.size();
         result.inlier_rmse_ = std::sqrt(total_error / count);
 
@@ -177,17 +186,28 @@ RegistrationResult __ICP_Point2Plane_cuda(device_vector_v3f_holder &model_pcd, c
         }
 
         // A = A_buffer.transpose()*A_buffer;
+
+#ifdef USE_GEMM_rather_than_SYRK
+        thrust::copy(thrust::cuda::par.on(cudaStreamPerThread), A_buffer.begin(), A_buffer.end(), AT_buffer.begin());
+        cudaStreamSynchronize(cudaStreamPerThread);
+        stat = cublasSgemm(cublas_handle, CUBLAS_OP_N, CUBLAS_OP_T, 6,  6, model_pcd.size(),
+                           &alpha, A_buffer_ptr, 6,
+                           AT_buffer_ptr, 6, &beta, A_dev_ptr, 6);
+#else
         stat = cublasSsyrk(cublas_handle, CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_N,
                             6, model_pcd.size(), &alpha, A_buffer_ptr, 6, &beta, A_dev_ptr, 6);
+#endif
+        cudaStreamSynchronize(cudaStreamPerThread);
         stat = cublasGetMatrix(6, 6, sizeof(float), A_dev_ptr , 6, A_host_ptr, 6);
 
-        // set upper part of ATA
+#ifndef USE_GEMM_rather_than_SYRK
+//        // set upper part of ATA
         for(int y=0; y<6; y++){
             for(int x=0; x<y; x++){
                 A_host[x + y*6] = A_host[y + x*6];
             }
         }
-
+#endif
 //        {
 //            std::cout << " -----A------- "<< std::endl;
 //            for(int i=0; i<6; i++){
@@ -202,6 +222,8 @@ RegistrationResult __ICP_Point2Plane_cuda(device_vector_v3f_holder &model_pcd, c
         // b = A_buffer.transpose()*b_buffer;
         stat = cublasSgemv(cublas_handle, CUBLAS_OP_N, 6, model_pcd.size(), &alpha, A_buffer_ptr,
                           6, b_buffer_ptr, 1, &beta, b_dev_ptr, 1);
+
+        cudaStreamSynchronize(cudaStreamPerThread);
         stat = cublasGetVector(6, sizeof(float), b_dev_ptr, 1, b_host_ptr, 1);
 
 //        {
@@ -214,7 +236,12 @@ RegistrationResult __ICP_Point2Plane_cuda(device_vector_v3f_holder &model_pcd, c
 //        }
 
         Mat4x4f extrinsic = eigen_slover_666(A_host_ptr, b_host_ptr);
-//        std::cout << extrinsic;
+
+//        {
+//            std::cout << "~~extrinsic~~~~" << std::endl;
+//            std::cout << extrinsic;
+//            std::cout << "\n~~~~~~~~~~~~~~\n" << std::endl;
+//        }
 
         transform_pcd_cuda<<<numBlocks, threadsPerBlock>>>(model_pcd_ptr, model_pcd.size(), extrinsic);
         cudaStreamSynchronize(cudaStreamPerThread);
