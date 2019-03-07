@@ -81,6 +81,28 @@ void view_pcd(vector<::Vec3f>& pcd_in){
     open3d::DrawGeometries({model_pcd_down});
 }
 
+void view_pcd(vector<::Vec3f>& pcd_in, vector<::Vec3f>& pcd_in2){
+    open3d::PointCloud model_pcd, model_pcd2;
+    for(auto& p: pcd_in){
+        model_pcd.points_.emplace_back(double(p.x), double(p.y), double(p.z));
+    }
+
+    for(auto& p: pcd_in2){
+        model_pcd2.points_.emplace_back(double(p.x), double(p.y), double(p.z));
+    }
+
+    double voxel_size = 0.005;
+    auto model_pcd_down = open3d::VoxelDownSample(model_pcd, voxel_size);
+    auto model_pcd_down2 = open3d::VoxelDownSample(model_pcd2, voxel_size);
+
+//    auto model_pcd_down = open3d::UniformDownSample(*model_pcd, 5);
+//    auto model_pcd_down = model_pcd;
+
+    model_pcd_down->PaintUniformColor({1, 0.706, 0});
+    model_pcd_down2->PaintUniformColor({0, 0.651, 0.929});
+    open3d::DrawGeometries({model_pcd_down, model_pcd_down2});
+}
+
 cv::Mat view_dep(cv::Mat dep){
     cv::Mat map = dep;
     double min;
@@ -169,8 +191,7 @@ static cv::Mat eulerAnglesToRotationMatrix(cv::Vec3f theta)
 
 static std::string prefix = "/home/meiqua/patch_linemod/public/datasets/hinterstoisser/";
 
-int main(int argc, char const *argv[]){
-
+void test_cuda_icp(){
     int width = 640; int height = 480;
 
     cuda_renderer::Model model(prefix+"models/obj_06.ply");
@@ -235,6 +256,9 @@ int main(int argc, char const *argv[]){
     Mat R = result_cv(cv::Rect(0, 0, 3, 3));
     auto R_v = helper::rotationMatrixToEulerAngles(R);
 
+    //view icp cloud
+    helper::view_pcd(pcd_buffer, pcd1);
+
     auto depth_cuda = cuda_renderer::render_cuda_keep_in_gpu(model.tris, mat4_v, width, height, proj);
 // view gpu depth
 //    vector<int> depth_host(depth_cuda.size());
@@ -272,6 +296,9 @@ int main(int argc, char const *argv[]){
     cout << "x: " << abs(R_v[0] - angle_x)/3.14f*180  << endl;
     cout << "y: " << abs(R_v[1] - angle_y)/3.14f*180 << endl;
     cout << "z: " << abs(R_v[2] - angle_z)/3.14f*180  << endl;
+}
 
+int main(int argc, char const *argv[]){
+    test_cuda_icp();
     return 0;
 }
