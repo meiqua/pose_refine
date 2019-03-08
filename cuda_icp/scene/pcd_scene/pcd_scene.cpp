@@ -60,15 +60,16 @@ void KDTree_cpu::build_tree(int max_num_pcd_in_leaf)
         std::fill(splited.begin() + num_nodes_now, splited.end(), 0);
 
         new_split_num = 0; // reset new split num
+        size_t num_nodes_old = num_nodes_now; // for iter, avoid reaching new node in 1 turn
 
         // search all the tree, we search one times more, but avoid using a stack instead
-        for(size_t node_iter = 0; node_iter < num_nodes_now; node_iter++){
+        for(size_t node_iter = 0; node_iter < num_nodes_old; node_iter++){
 
             if(splited[node_iter] == 0){ // not splited yet
                 // not a leaf
                 if(nodes[node_iter].right - nodes[node_iter].left > max_num_pcd_in_leaf){
-                    // split
 
+                    // split start <----------------------
                     // get bbox
                     float x_min = FLT_MAX; float x_max = FLT_MIN;
                     float y_min = FLT_MAX; float y_max = FLT_MIN;
@@ -121,7 +122,7 @@ void KDTree_cpu::build_tree(int max_num_pcd_in_leaf)
                     }
 
                     splited[node_iter] = 1;
-                    // split success
+                    // split success <----------------------
 
                     // update parent
                     nodes[node_iter].child1 = node_iter + 1;
@@ -149,4 +150,7 @@ void KDTree_cpu::build_tree(int max_num_pcd_in_leaf)
             stop = true;
         }
     }
+
+    // we may give nodes more memory while spliting
+    nodes.resize(num_nodes_now);
 }
