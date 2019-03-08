@@ -1,11 +1,8 @@
 #include "pcd_scene.h"
 
 
-void Scene_nn::init_Scene_nn_cpu(cv::Mat &scene_depth__, Mat3x3f &scene_K, std::vector<Vec3f>& pcd_buffer,
-                                 std::vector<Vec3f>& normal_buffer)
+void Scene_nn::init_Scene_nn_cpu(cv::Mat &scene_depth__, Mat3x3f &scene_K, KDTree_cpu& kdtree)
 {
-    device_vector_holder<int> test(1);
-
     int depth_type = scene_depth__.type();
     assert(depth_type == CV_16U || depth_type == CV_32S);
 
@@ -17,27 +14,36 @@ void Scene_nn::init_Scene_nn_cpu(cv::Mat &scene_depth__, Mat3x3f &scene_K, std::
     }
 
     auto normal = get_normal(scene_depth, scene_K);
-    pcd_buffer.clear();
-    pcd_buffer.reserve(scene_depth.rows * scene_depth.cols);
-    normal_buffer.clear();
-    normal_buffer.reserve(scene_depth.rows * scene_depth.cols);
+    kdtree.pcd_buffer.clear();
+    kdtree.pcd_buffer.reserve(scene_depth.rows * scene_depth.cols);
+    kdtree.normal_buffer.clear();
+    kdtree.normal_buffer.reserve(scene_depth.rows * scene_depth.cols);
 
     for(int r=0; r<scene_depth.rows; r++){
         for(int c=0; c<scene_depth.cols; c++){
             auto& dep_at_rc = scene_depth.at<uint16_t>(r, c);
             if(dep_at_rc > 0){
-                pcd_buffer.push_back(dep2pcd(c, r, dep_at_rc, scene_K));
-                normal_buffer.push_back(normal[c + r*scene_depth.cols]);
+                kdtree.pcd_buffer.push_back(dep2pcd(c, r, dep_at_rc, scene_K));
+                kdtree.normal_buffer.push_back(normal[c + r*scene_depth.cols]);
             }
         }
     }
+
+    kdtree.build_tree();
+
+    pcd_ptr = kdtree.pcd_buffer.data();
+    normal_ptr = kdtree.normal_buffer.data();
+    node_ptr = kdtree.nodes.data();
 }
+
+
 
 void KDTree_cpu::build_tree(int max_num_pcd_in_leaf)
 {
     assert(pcd_buffer.size() > 0 && pcd_buffer.size() == normal_buffer.size()
            && "no pcd yet, or pcd size != normal size");
 
+    std::vector<int> index;
     index.resize(pcd_buffer.size());
     std::iota (std::begin(index), std::end(index), 0); // Fill with 0, 1, 2, ...
 
@@ -153,4 +159,16 @@ void KDTree_cpu::build_tree(int max_num_pcd_in_leaf)
 
     // we may give nodes more memory while spliting
     nodes.resize(num_nodes_now);
+
+    // reorder pcd normal according to index, so avoid using index when query
+    std::vector<Vec3f> v3f_buffer(pcd_buffer.size());
+    for(size_t i=0; i<pcd_buffer.size(); i++){
+        v3f_buffer[i] = pcd_buffer[index[i]];
+    }
+    pcd_buffer = v3f_buffer;
+
+    for(size_t i=0; i<normal_buffer.size(); i++){
+        v3f_buffer[i] = normal_buffer[index[i]];
+    }
+    normal_buffer = v3f_buffer;
 }
