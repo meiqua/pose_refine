@@ -84,7 +84,7 @@ __global__ void get_Ab(const Scene scene, Vec3f* model_pcd_ptr, uint32_t model_p
 }
 
 template<class Scene>
-RegistrationResult __ICP_Point2Plane_cuda(device_vector_v3f_holder &model_pcd, const Scene scene,
+RegistrationResult __ICP_Point2Plane_cuda(device_vector_holder<Vec3f> &model_pcd, const Scene scene,
                                         const ICPConvergenceCriteria criteria)
 {
     RegistrationResult result;
@@ -253,7 +253,7 @@ RegistrationResult __ICP_Point2Plane_cuda(device_vector_v3f_holder &model_pcd, c
     return result;
 }
 
-RegistrationResult ICP_Point2Plane_cuda(device_vector_v3f_holder &model_pcd, const Scene_projective scene,
+RegistrationResult ICP_Point2Plane_cuda(device_vector_holder<Vec3f> &model_pcd, const Scene_projective scene,
                                         const ICPConvergenceCriteria criteria){
     return __ICP_Point2Plane_cuda(model_pcd, scene, criteria);
 }
@@ -288,7 +288,7 @@ __global__ void depth2cloud(T* depth, Vec3f* pcd, uint32_t width, uint32_t heigh
 }
 
 template <class T>
-device_vector_v3f_holder __depth2cloud_cuda(T *depth, uint32_t width, uint32_t height, Mat3x3f& K,
+device_vector_holder<Vec3f> __depth2cloud_cuda(T *depth, uint32_t width, uint32_t height, Mat3x3f& K,
                                  uint32_t stride, uint32_t tl_x, uint32_t tl_y)
 {
     thrust::device_vector<uint32_t> mask(width*height/stride/stride, 0);
@@ -307,7 +307,7 @@ device_vector_v3f_holder __depth2cloud_cuda(T *depth, uint32_t width, uint32_t h
     thrust::exclusive_scan(mask.begin(), mask.end(), mask.begin(), 0); // in-place scan
     uint32_t total_pcd_num = mask.back() + mask_back_temp;
 
-    device_vector_v3f_holder cloud(total_pcd_num);
+    device_vector_holder<Vec3f> cloud(total_pcd_num);
     Vec3f* cloud_ptr = cloud.data();
 //    gpuErrchk(cudaPeekAtLastError());
 
@@ -319,11 +319,11 @@ device_vector_v3f_holder __depth2cloud_cuda(T *depth, uint32_t width, uint32_t h
     return cloud;
 }
 
-device_vector_v3f_holder depth2cloud_cuda(int32_t *depth, uint32_t width, uint32_t height, Mat3x3f& K,
+device_vector_holder<Vec3f> depth2cloud_cuda(int32_t *depth, uint32_t width, uint32_t height, Mat3x3f& K,
                                  uint32_t stride, uint32_t tl_x, uint32_t tl_y){
     return  __depth2cloud_cuda(depth, width, height, K, stride, tl_x, tl_y);
 }
-device_vector_v3f_holder depth2cloud_cuda(uint16_t *depth, uint32_t width, uint32_t height, Mat3x3f& K,
+device_vector_holder<Vec3f> depth2cloud_cuda(uint16_t *depth, uint32_t width, uint32_t height, Mat3x3f& K,
                                  uint32_t stride, uint32_t tl_x, uint32_t tl_y){
     return  __depth2cloud_cuda(depth, width, height, K, stride, tl_x, tl_y);
 }

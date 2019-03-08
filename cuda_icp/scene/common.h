@@ -9,29 +9,29 @@
 #include <opencv2/core/core.hpp>
 
 // thrust device vector can't be used in cpp by design
-class device_vector_v3f_holder{
+template <typename T>
+class device_vector_holder{
 public:
-    Vec3f* __gpu_memory;
+    T* __gpu_memory;
     size_t __size;
     bool valid = false;
-    device_vector_v3f_holder(){}
-    device_vector_v3f_holder(size_t size);
-    device_vector_v3f_holder(size_t size, Vec3f init);
-    ~device_vector_v3f_holder();
+    device_vector_holder(){}
+    device_vector_holder(size_t size);
+    device_vector_holder(size_t size, T init);
+    ~device_vector_holder();
 
-    Vec3f* data(){return __gpu_memory;}
-    thrust::device_ptr<Vec3f> data_thr(){return thrust::device_ptr<Vec3f>(__gpu_memory);}
-    Vec3f* begin(){return __gpu_memory;}
-    thrust::device_ptr<Vec3f> begin_thr(){return thrust::device_ptr<Vec3f>(__gpu_memory);}
-    Vec3f* end(){return __gpu_memory + __size;}
-    thrust::device_ptr<Vec3f> end_thr(){return thrust::device_ptr<Vec3f>(__gpu_memory + __size);}
+    T* data(){return __gpu_memory;}
+    thrust::device_ptr<T> data_thr(){return thrust::device_ptr<T>(__gpu_memory);}
+    T* begin(){return __gpu_memory;}
+    thrust::device_ptr<T> begin_thr(){return thrust::device_ptr<T>(__gpu_memory);}
+    T* end(){return __gpu_memory + __size;}
+    thrust::device_ptr<T> end_thr(){return thrust::device_ptr<T>(__gpu_memory + __size);}
 
     size_t size(){return __size;}
 
     void __malloc(size_t size);
     void __free();
 };
-
 
 // dep: mm
 template <class T>

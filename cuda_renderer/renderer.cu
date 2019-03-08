@@ -12,11 +12,13 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=t
 }
 
 
-device_vector_int_holder::~device_vector_int_holder(){
+template<typename T>
+device_vector_holder<T>::~device_vector_holder(){
     __free();
 }
 
-void device_vector_int_holder::__free(){
+template<typename T>
+void device_vector_holder<T>::__free(){
     if(valid){
         cudaFree(__gpu_memory);
         valid = false;
@@ -24,22 +26,27 @@ void device_vector_int_holder::__free(){
     }
 }
 
-device_vector_int_holder::device_vector_int_holder(size_t size_, int init)
+template<typename T>
+device_vector_holder<T>::device_vector_holder(size_t size_, T init)
 {
     __malloc(size_);
     thrust::fill(begin_thr(), end_thr(), init);
 }
 
-void device_vector_int_holder::__malloc(size_t size_){
+template<typename T>
+void device_vector_holder<T>::__malloc(size_t size_){
     if(valid) __free();
-    cudaMalloc((void**)&__gpu_memory, size_*sizeof(int));
+    cudaMalloc((void**)&__gpu_memory, size_ * sizeof(T));
     __size = size_;
     valid = true;
 }
 
-device_vector_int_holder::device_vector_int_holder(size_t size){
-    __malloc(size);
+template<typename T>
+device_vector_holder<T>::device_vector_holder(size_t size_){
+    __malloc(size_);
 }
+
+template class device_vector_holder<int>;
 
 void print_cuda_memory_usage(){
     // show memory usage of GPU
@@ -196,7 +203,7 @@ std::vector<int32_t> render_cuda(const std::vector<Model::Triangle>& tris,const 
         render_triangle<<<numBlocks, threadsPerBlock>>>(device_tris_ptr, tris.size(),
                                                         device_poses_ptr, poses.size(),
                                                         depth_image_vec, width, height, proj_mat, roi);
-        cudaThreadSynchronize();
+        cudaDeviceSynchronize();
         gpuErrchk(cudaPeekAtLastError());
     }
 
@@ -210,7 +217,7 @@ std::vector<int32_t> render_cuda(const std::vector<Model::Triangle>& tris,const 
     return result_depth;
 }
 
-device_vector_int_holder render_cuda_keep_in_gpu(const std::vector<Model::Triangle>& tris,const std::vector<Model::mat4x4>& poses,
+device_vector_holder<int> render_cuda_keep_in_gpu(const std::vector<Model::Triangle>& tris,const std::vector<Model::mat4x4>& poses,
                             size_t width, size_t height, const Model::mat4x4& proj_mat, const Model::ROI roi){
 
     const size_t threadsPerBlock = 256;
@@ -226,7 +233,7 @@ device_vector_int_holder render_cuda_keep_in_gpu(const std::vector<Model::Triang
     }
     // atomic min only support int32
 //    thrust::device_vector<int32_t> device_depth_int(poses.size()*real_width*real_height, INT_MAX);
-    device_vector_int_holder device_depth_int(poses.size()*real_width*real_height, INT_MAX);
+    device_vector_holder<int> device_depth_int(poses.size()*real_width*real_height, INT_MAX);
     {
         Model::Triangle* device_tris_ptr = thrust::raw_pointer_cast(device_tris.data());
         Model::mat4x4* device_poses_ptr = thrust::raw_pointer_cast(device_poses.data());

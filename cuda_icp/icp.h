@@ -58,7 +58,7 @@ std::vector<Vec3f> depth2cloud_cpu(uint16_t* depth, uint32_t width, uint32_t hei
 
 #ifdef CUDA_ON
 //template <class Scene>
-RegistrationResult ICP_Point2Plane_cuda(device_vector_v3f_holder& model_pcd,
+RegistrationResult ICP_Point2Plane_cuda(device_vector_holder<Vec3f>& model_pcd,
         const Scene_projective scene,
         const ICPConvergenceCriteria criteria = ICPConvergenceCriteria());
 
@@ -67,9 +67,9 @@ RegistrationResult ICP_Point2Plane_cuda(device_vector_v3f_holder& model_pcd,
 
 // avoid use template in header
 //template <class T>
-device_vector_v3f_holder depth2cloud_cuda(int32_t* depth, uint32_t width, uint32_t height, Mat3x3f& K, uint32_t stride = 1,
+device_vector_holder<Vec3f> depth2cloud_cuda(int32_t* depth, uint32_t width, uint32_t height, Mat3x3f& K, uint32_t stride = 1,
                      uint32_t tl_x = 0, uint32_t tl_y = 0);
-device_vector_v3f_holder depth2cloud_cuda(uint16_t* depth, uint32_t width, uint32_t height, Mat3x3f& K, uint32_t stride = 1,
+device_vector_holder<Vec3f> depth2cloud_cuda(uint16_t* depth, uint32_t width, uint32_t height, Mat3x3f& K, uint32_t stride = 1,
                                 uint32_t tl_x = 0, uint32_t tl_y = 0);
 #endif
 }

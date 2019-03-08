@@ -1,10 +1,12 @@
 #include "common.h"
 
-device_vector_v3f_holder::~device_vector_v3f_holder(){
+template<typename T>
+device_vector_holder<T>::~device_vector_holder(){
     __free();
 }
 
-void device_vector_v3f_holder::__free(){
+template<typename T>
+void device_vector_holder<T>::__free(){
     if(valid){
         cudaFree(__gpu_memory);
         valid = false;
@@ -12,20 +14,27 @@ void device_vector_v3f_holder::__free(){
     }
 }
 
-device_vector_v3f_holder::device_vector_v3f_holder(size_t size_, Vec3f init)
+template<typename T>
+device_vector_holder<T>::device_vector_holder(size_t size_, T init)
 {
     __malloc(size_);
     thrust::fill(begin_thr(), end_thr(), init);
 }
 
-void device_vector_v3f_holder::__malloc(size_t size_){
+template<typename T>
+void device_vector_holder<T>::__malloc(size_t size_){
     if(valid) __free();
-    cudaMalloc((void**)&__gpu_memory, size_ * sizeof(Vec3f));
+    cudaMalloc((void**)&__gpu_memory, size_ * sizeof(T));
     __size = size_;
     valid = true;
 }
 
-device_vector_v3f_holder::device_vector_v3f_holder(size_t size_){
+template<typename T>
+device_vector_holder<T>::device_vector_holder(size_t size_){
     __malloc(size_);
 }
 
+template class device_vector_holder<Vec3f>;
+
+#include "pcd_scene/pcd_scene.h"
+template class device_vector_holder<Node_kdtree>;

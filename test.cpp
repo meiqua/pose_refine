@@ -192,6 +192,7 @@ static cv::Mat eulerAnglesToRotationMatrix(cv::Vec3f theta)
 static std::string prefix = "/home/meiqua/patch_linemod/public/datasets/hinterstoisser/";
 
 void test_cuda_icp(){
+
     int width = 640; int height = 480;
 
     cuda_renderer::Model model(prefix+"models/obj_06.ply");
@@ -274,8 +275,7 @@ void test_cuda_icp(){
 //    thrust::copy(pcd1_cuda.begin_thr(), pcd1_cuda.end_thr(), pcd1_host.begin());
 //    helper::view_pcd(pcd1_host);
 
-
-    device_vector_v3f_holder pcd_buffer_cuda, normal_buffer_cuda;
+    device_vector_holder<::Vec3f> pcd_buffer_cuda, normal_buffer_cuda;
     scene.init_Scene_projective_cuda(scene_depth, K_, pcd_buffer_cuda, normal_buffer_cuda);
     auto result_cuda = cuda_icp::ICP_Point2Plane_cuda(pcd1_cuda, scene);
     Mat result_cv_cuda = helper::mat4x4f2cv(result_cuda.transformation_);

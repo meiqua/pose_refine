@@ -1,8 +1,8 @@
 #include "depth_scene.h"
 
 void Scene_projective::init_Scene_projective_cuda(cv::Mat &scene_depth, Mat3x3f &scene_K,
-                                                  device_vector_v3f_holder &pcd_buffer,
-                                                  device_vector_v3f_holder &normal_buffer,
+                                                  device_vector_holder<Vec3f> &pcd_buffer,
+                                                  device_vector_holder<Vec3f> &normal_buffer,
                                                   size_t width_, size_t height_, float max_dist_diff_){
     K = scene_K;
     width = width_;
