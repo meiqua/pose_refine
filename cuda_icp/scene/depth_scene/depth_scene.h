@@ -1,8 +1,9 @@
 #pragma once
+
 #include "../common.h"
 
 // just implement query func,
-// no matter it's projective or ANN
+// no matter it's projective or NN
 struct Scene_projective{
     size_t width = 640, height = 480;
     float max_dist_diff = 0.1f; // m

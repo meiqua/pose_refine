@@ -43,7 +43,8 @@ public:
 };
 #endif
 
-
+// just implement query func,
+// no matter it's projective or NN
 class Scene_nn{
     float max_dist_diff = 0.1f; // m
     Vec3f* pcd_ptr;  // will be passed to kernel in cuda, so just hold pointers

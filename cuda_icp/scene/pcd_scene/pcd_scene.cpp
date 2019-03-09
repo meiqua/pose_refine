@@ -151,7 +151,7 @@ void KDTree_cpu::build_tree(int max_num_pcd_in_leaf)
                 nodes[num_nodes_now + 1].right = nodes[node_iter].right;
                 nodes[num_nodes_now + 1].parent = node_iter;
 
-                num_nodes_now += 2;  // may use a buffer, then reduce to parallel
+                num_nodes_now += 2;  // to parallel, use a buffer, then reduce
 //                    new_split_num ++;
                 new_split_num = true;  // ++ make it hard to parallel
             }
