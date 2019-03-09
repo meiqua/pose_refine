@@ -68,10 +68,6 @@ public:
 
         assert(node_ptr[0].parent == -1);
         while (current >= 0) { // parent of root is -1
-
-            //test
-//            printf("%d\n", current);
-
              node_cur = node_ptr[current];
 
              float diff = 0;

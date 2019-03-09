@@ -1,8 +1,11 @@
 #pragma once
 
 #include "geometry.h"
+
+#ifdef CUDA_ON
 #include <thrust/scan.h>
 #include <thrust/execution_policy.h>
+#endif
 
 #include "scene/depth_scene/depth_scene.h"
 #include "scene/pcd_scene/pcd_scene.h"
