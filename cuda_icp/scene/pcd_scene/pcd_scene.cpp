@@ -70,7 +70,6 @@ void KDTree_cpu::build_tree(int max_num_pcd_in_leaf)
         num_nodes_last_last_turn = num_nodes_now_last_turn;
         num_nodes_now_last_turn = num_nodes_now; // for iter, avoid reaching new node in 1 turn
 
-        // search all the tree, we search one times more, but avoid using a stack instead
         // if you want to implement cuda version, paralleling this loop looks fine
         for(size_t node_iter = num_nodes_last_last_turn; node_iter < num_nodes_now_last_turn; node_iter++){
 
