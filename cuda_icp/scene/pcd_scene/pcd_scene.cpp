@@ -37,7 +37,9 @@ void Scene_nn::init_Scene_nn_cpu(cv::Mat &scene_depth__, Mat3x3f &scene_K, KDTre
 }
 
 
-
+// non-recursion non-stack building
+// make it easy to transform to cuda implementation
+// but I won't, build in cpu, coped to gpu is enough
 void KDTree_cpu::build_tree(int max_num_pcd_in_leaf)
 {
     assert(pcd_buffer.size() > 0 && pcd_buffer.size() == normal_buffer.size()
@@ -53,102 +55,106 @@ void KDTree_cpu::build_tree(int max_num_pcd_in_leaf)
     nodes.resize(1);
     nodes[0].left = 0;
     nodes[0].right = index.size();
-    std::vector<uint8_t> splited(1, 0); // mark if nodes are splited
 
     size_t new_split_num = 0;
     size_t num_nodes_now = 1;
+    size_t num_nodes_last_last_turn = 0;
+    size_t num_nodes_now_last_turn = 0;
     bool stop = false;
 
     while (!stop) { // when we have new nodes to split, go
 
         nodes.resize(num_nodes_now*2+1); // we may increase now + 1 in 1 turn
-        splited.resize(nodes.size());
-        std::fill(splited.begin() + num_nodes_now, splited.end(), 0);
 
         new_split_num = 0; // reset new split num
-        size_t num_nodes_old = num_nodes_now; // for iter, avoid reaching new node in 1 turn
+        num_nodes_last_last_turn = num_nodes_now_last_turn;
+        num_nodes_now_last_turn = num_nodes_now; // for iter, avoid reaching new node in 1 turn
 
         // search all the tree, we search one times more, but avoid using a stack instead
-        for(size_t node_iter = 0; node_iter < num_nodes_old; node_iter++){
+        // if you want to implement cuda version, paralleling this loop looks fine
+        for(size_t node_iter = num_nodes_last_last_turn; node_iter < num_nodes_now_last_turn; node_iter++){
 
-            if(splited[node_iter] == 0){ // not splited yet
-                // not a leaf
-                if(nodes[node_iter].right - nodes[node_iter].left > max_num_pcd_in_leaf){
+            // not a leaf
+            if(nodes[node_iter].right - nodes[node_iter].left > max_num_pcd_in_leaf){
 
-                    // split start <----------------------
-                    // get bbox
-                    float x_min = FLT_MAX; float x_max = FLT_MIN;
-                    float y_min = FLT_MAX; float y_max = FLT_MIN;
-                    float z_min = FLT_MAX; float z_max = FLT_MIN;
-                    for(int idx_iter = nodes[node_iter].left; idx_iter < nodes[node_iter].right; idx_iter++){
-                        const auto& p = pcd_buffer[index[idx_iter]];
-                        if(p.x > x_max) x_max = p.x; if(p.x < x_min) x_min = p.x;
-                        if(p.y > y_max) y_max = p.y; if(p.y < y_min) y_min = p.y;
-                        if(p.z > z_max) z_max = p.z; if(p.z < z_min) z_min = p.z;
-                    }
-
-                    // select split dim & value
-                    int split_dim = 0;
-                    float split_val = 0;
-                    float span_xyz[3], split_v_xyz[3];
-                    float max_span = FLT_MIN;
-                    span_xyz[0] = x_max - x_min; split_v_xyz[0] = x_min + span_xyz[0]/2;
-                    span_xyz[1] = y_max - y_min; split_v_xyz[1] = y_min + span_xyz[1]/2;
-                    span_xyz[2] = z_max - z_min; split_v_xyz[2] = z_min + span_xyz[2]/2;
-                    for(int span_iter=0; span_iter<3; span_iter++){
-                        if(span_xyz[span_iter] > max_span){
-                            max_span = span_xyz[span_iter];
-                            split_dim = span_iter;
-                            split_val = split_v_xyz[span_iter];
-                        }
-                    }
-
-                    // reorder index
-                    int left_iter = nodes[node_iter].left;
-                    int right_iter = nodes[node_iter].right - 1;
-                    float split_low = FLT_MIN;
-                    float split_high = FLT_MAX;
-
-                    for(int idx_iter = nodes[node_iter].left; idx_iter<nodes[node_iter].right; idx_iter++){
-                        float p = pcd_buffer[index[idx_iter]][split_dim];
-                        if(p < split_val){
-                            index_buffer[left_iter] = index[idx_iter];
-                            left_iter ++;
-                            if(p > split_low) split_low = p;
-                        }else{
-                            index_buffer[right_iter] = index[idx_iter];
-                            right_iter --;
-                            if(p < split_high) split_high = p;
-                        }
-                    }
-                    assert(left_iter == right_iter + 1 && "left & right should meet");
-
-                    for(int idx_iter = nodes[node_iter].left; idx_iter<nodes[node_iter].right; idx_iter++){
-                        index[idx_iter] = index_buffer[idx_iter];
-                    }
-
-                    splited[node_iter] = 1;
-                    // split success <----------------------
-
-                    // update parent
-                    nodes[node_iter].child1 = node_iter + 1;
-                    nodes[node_iter].child2 = node_iter + 2;
-                    nodes[node_iter].split_l = split_low;
-                    nodes[node_iter].split_h = split_high;
-                    nodes[node_iter].split_dim = split_dim;
-
-                    // update child
-                    nodes[node_iter + 1].left = nodes[node_iter].left;
-                    nodes[node_iter + 1].right = left_iter;
-                    nodes[node_iter + 1].parent = node_iter;
-
-                    nodes[node_iter + 2].left = left_iter;
-                    nodes[node_iter + 2].right = nodes[node_iter].right;
-                    nodes[node_iter + 2].parent = node_iter;
-
-                    num_nodes_now += 2;
-                    new_split_num ++;
+                // split start <----------------------
+                // get bbox
+                float x_min = FLT_MAX; float x_max = -FLT_MAX;  // fxxk, FLT_MIN is 0
+                float y_min = FLT_MAX; float y_max = -FLT_MAX;
+                float z_min = FLT_MAX; float z_max = -FLT_MAX;
+                for(int idx_iter = nodes[node_iter].left; idx_iter < nodes[node_iter].right; idx_iter++){
+                    const auto& p = pcd_buffer[index[idx_iter]];
+                    if(p.x > x_max) x_max = p.x;
+                    if(p.x < x_min) x_min = p.x;
+                    if(p.y > y_max) y_max = p.y;
+                    if(p.y < y_min) y_min = p.y;
+                    if(p.z > z_max) z_max = p.z;
+                    if(p.z < z_min) z_min = p.z;
                 }
+
+                // select split dim & value
+                int split_dim = 0;
+                float split_val = 0;
+                float span_xyz[3], split_v_xyz[3];
+                float max_span = -FLT_MAX;
+                span_xyz[0] = x_max - x_min; split_v_xyz[0] = (x_min + x_max)/2;
+                span_xyz[1] = y_max - y_min; split_v_xyz[1] = (y_min + y_max)/2;
+                span_xyz[2] = z_max - z_min; split_v_xyz[2] = (z_min + z_max)/2;
+                for(int span_iter=0; span_iter<3; span_iter++){
+                    if(span_xyz[span_iter] > max_span){
+                        max_span = span_xyz[span_iter];
+                        split_dim = span_iter;
+                        split_val = split_v_xyz[span_iter];
+                    }
+                }
+
+                // reorder index
+                int left_iter = nodes[node_iter].left;
+                int right_iter = nodes[node_iter].right - 1;
+                float split_low = -FLT_MAX;
+                float split_high = FLT_MAX;
+
+                for(int idx_iter = nodes[node_iter].left; idx_iter<nodes[node_iter].right; idx_iter++){
+                    float p = pcd_buffer[index[idx_iter]][split_dim];
+                    if(p < split_val){
+                        index_buffer[left_iter] = index[idx_iter];
+                        left_iter ++;
+                        if(p > split_low) split_low = p;
+                    }else{
+                        index_buffer[right_iter] = index[idx_iter];
+                        right_iter --;
+                        if(p < split_high) split_high = p;
+                    }
+                }
+                assert(left_iter == right_iter + 1 && "left & right should meet");
+                split_val = (split_low + split_high)/2; // reset split_val to middle
+
+                for(int idx_iter = nodes[node_iter].left; idx_iter<nodes[node_iter].right; idx_iter++){
+                    index[idx_iter] = index_buffer[idx_iter];
+                }
+                // split success <----------------------
+
+                // update parent
+                nodes[node_iter].child1 = num_nodes_now;
+                nodes[node_iter].child2 = num_nodes_now + 1;
+                nodes[node_iter].split_v = split_val;
+                nodes[node_iter].split_dim = split_dim;
+                nodes[node_iter].bbox[0] = x_min;  nodes[node_iter].bbox[1] = x_max;
+                nodes[node_iter].bbox[2] = y_min;  nodes[node_iter].bbox[3] = y_max;
+                nodes[node_iter].bbox[4] = z_min;  nodes[node_iter].bbox[5] = z_max;
+
+                // update child
+                nodes[num_nodes_now].left = nodes[node_iter].left;
+                nodes[num_nodes_now].right = left_iter;
+                nodes[num_nodes_now].parent = node_iter;
+
+                nodes[num_nodes_now + 1].left = left_iter;
+                nodes[num_nodes_now + 1].right = nodes[node_iter].right;
+                nodes[num_nodes_now + 1].parent = node_iter;
+
+                num_nodes_now += 2;  // may use a buffer, then reduce to parallel
+//                    new_split_num ++;
+                new_split_num = true;  // ++ make it hard to parallel
             }
         }
 

@@ -8,7 +8,11 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/core/core.hpp>
 
+
+#ifdef CUDA_ON
 // thrust device vector can't be used in cpp by design
+// same codes in cuda renderer,
+// because we don't want these two related to each other
 template <typename T>
 class device_vector_holder{
 public:
@@ -32,6 +36,7 @@ public:
     void __malloc(size_t size);
     void __free();
 };
+#endif
 
 // dep: mm
 template <class T>
@@ -65,5 +70,9 @@ Vec3i pcd2dep(const Vec3f& pcd, const Mat3x3f& K, size_t tl_x=0, size_t tl_y=0){
 template<typename T>
 __device__ __host__ inline
 T std__abs(T in){return (in > 0)? in: (-in);}
+
+template<typename T>
+__device__ __host__ inline
+T pow2(T in){return in * in;}
 
 std::vector<Vec3f> get_normal(const cv::Mat& depth, const Mat3x3f& K);

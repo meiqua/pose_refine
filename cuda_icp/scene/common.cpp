@@ -21,6 +21,8 @@ std::vector<Vec3f> get_normal(const cv::Mat& depth__, const Mat3x3f& K){
     assert(depth_type == CV_16U || depth_type == CV_32S);
     if(depth_type == CV_32S){
         depth__.convertTo(depth, CV_16U);
+    }else{
+        depth = depth__;
     }
 
     std::vector<Vec3f> normals;

@@ -191,6 +191,9 @@ static cv::Mat eulerAnglesToRotationMatrix(cv::Vec3f theta)
 
 static std::string prefix = "/home/meiqua/patch_linemod/public/datasets/hinterstoisser/";
 
+//#define USE_PROJ
+
+#ifdef CUDA_ON
 void test_cuda_icp(){
 
     int width = 640; int height = 480;
@@ -247,9 +250,16 @@ void test_cuda_icp(){
 //    helper::view_pcd(pcd1);
 
     cv::Mat scene_depth(height, width, CV_32S, depth_cpu.data() + width*height);
+
+#ifdef USE_PROJ
     Scene_projective scene;
     vector<::Vec3f> pcd_buffer, normal_buffer;
     scene.init_Scene_projective_cpu(scene_depth, K_, pcd_buffer, normal_buffer);
+#else
+    Scene_nn scene;
+    KDTree_cpu kdtree_cpu;
+    scene.init_Scene_nn_cpu(scene_depth, K_, kdtree_cpu);
+#endif
     //view init cloud; the far point is 0 in scene
 //    helper::view_pcd(pcd1, pcd_buffer);
 
@@ -275,8 +285,14 @@ void test_cuda_icp(){
 //    thrust::copy(pcd1_cuda.begin_thr(), pcd1_cuda.end_thr(), pcd1_host.begin());
 //    helper::view_pcd(pcd1_host);
 
+#ifdef USE_PROJ
     device_vector_holder<::Vec3f> pcd_buffer_cuda, normal_buffer_cuda;
     scene.init_Scene_projective_cuda(scene_depth, K_, pcd_buffer_cuda, normal_buffer_cuda);
+#else
+    KDTree_cuda kdtree_cuda;
+    scene.init_Scene_nn_cuda(scene_depth, K_, kdtree_cuda);
+#endif
+
     auto result_cuda = cuda_icp::ICP_Point2Plane_cuda(pcd1_cuda, scene);
     Mat result_cv_cuda = helper::mat4x4f2cv(result_cuda.transformation_);
 
@@ -298,8 +314,13 @@ void test_cuda_icp(){
     cout << "y: " << abs(R_v[1] - angle_y)/3.14f*180 << endl;
     cout << "z: " << abs(R_v[2] - angle_z)/3.14f*180  << endl;
 }
+#endif
 
 int main(int argc, char const *argv[]){
+
+#ifdef CUDA_ON
     test_cuda_icp();
+#endif
+
     return 0;
 }

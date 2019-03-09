@@ -168,6 +168,11 @@ RegistrationResult ICP_Point2Plane_cpu(std::vector<Vec3f> &model_pcd, const Scen
     return __ICP_Point2Plane_cpu(model_pcd, scene, criteria);
 }
 
+RegistrationResult ICP_Point2Plane_cpu(std::vector<Vec3f> &model_pcd, const Scene_nn scene,
+                                       const ICPConvergenceCriteria criteria){
+    return __ICP_Point2Plane_cpu(model_pcd, scene, criteria);
+}
+
 template<class T>
 void cpu_exclusive_scan_serial(T* start, uint32_t N){
     T cache = start[0];

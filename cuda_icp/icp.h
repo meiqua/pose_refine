@@ -5,6 +5,7 @@
 #include <thrust/execution_policy.h>
 
 #include "scene/depth_scene/depth_scene.h"
+#include "scene/pcd_scene/pcd_scene.h"
 
 namespace cuda_icp {
 
@@ -46,6 +47,10 @@ RegistrationResult ICP_Point2Plane_cpu(std::vector<Vec3f>& model_pcd,
         const Scene_projective scene,
         const ICPConvergenceCriteria criteria = ICPConvergenceCriteria());
 
+RegistrationResult ICP_Point2Plane_cpu(std::vector<Vec3f>& model_pcd,
+        const Scene_nn scene,
+        const ICPConvergenceCriteria criteria = ICPConvergenceCriteria());
+
 // depth can be int32, if we use our cuda renderer
 // tl_x tl_y: depth may be cropped by renderer directly
 
@@ -60,6 +65,10 @@ std::vector<Vec3f> depth2cloud_cpu(uint16_t* depth, uint32_t width, uint32_t hei
 //template <class Scene>
 RegistrationResult ICP_Point2Plane_cuda(device_vector_holder<Vec3f>& model_pcd,
         const Scene_projective scene,
+        const ICPConvergenceCriteria criteria = ICPConvergenceCriteria());
+
+RegistrationResult ICP_Point2Plane_cuda(device_vector_holder<Vec3f>& model_pcd,
+        const Scene_nn scene,
         const ICPConvergenceCriteria criteria = ICPConvergenceCriteria());
 
 // depth can be int32, if we use our cuda renderer

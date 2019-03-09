@@ -145,6 +145,10 @@ public:
     void get_bounding_box(aiVector3D& min, aiVector3D& max) const;
 };
 
+#ifdef CUDA_ON
+// thrust device vector can't be used in cpp by design
+// same codes in cuda renderer,
+// because we don't want these two related to each other
 template <typename T>
 class device_vector_holder{
 public:
@@ -168,7 +172,7 @@ public:
     void __malloc(size_t size);
     void __free();
 };
-
+#endif
 
 std::vector<Model::mat4x4> mat_to_compact_4x4(const std::vector<cv::Mat>& poses);
 Model::mat4x4 compute_proj(const cv::Mat& K, int width, int height, float near=10, float far=10000);

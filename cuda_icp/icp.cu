@@ -258,6 +258,11 @@ RegistrationResult ICP_Point2Plane_cuda(device_vector_holder<Vec3f> &model_pcd, 
     return __ICP_Point2Plane_cuda(model_pcd, scene, criteria);
 }
 
+RegistrationResult ICP_Point2Plane_cuda(device_vector_holder<Vec3f> &model_pcd, const Scene_nn scene,
+                                        const ICPConvergenceCriteria criteria){
+    return __ICP_Point2Plane_cuda(model_pcd, scene, criteria);
+}
+
 
 template <class T>
 __global__ void depth2mask(T* depth, uint32_t* mask, uint32_t width, uint32_t height, uint32_t stride){
