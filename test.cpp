@@ -266,15 +266,19 @@ timer.reset();
     Scene_projective scene;
     vector<::Vec3f> pcd_buffer, normal_buffer;
     scene.init_Scene_projective_cpu(scene_depth, K_, pcd_buffer, normal_buffer);
-    //view init cloud; the far point is 0 in scene
-    helper::view_pcd(pcd1, pcd_buffer);
 #else
     Scene_nn scene;
     KDTree_cpu kdtree_cpu;
     scene.init_Scene_nn_cpu(scene_depth, K_, kdtree_cpu);
-    helper::view_pcd(pcd1, kdtree_cpu.pcd_buffer);
 #endif
 timer.out("init scene cpu");
+
+#ifdef USE_PROJ
+    //view init cloud; the far point is 0 in scene
+    helper::view_pcd(pcd1, pcd_buffer);
+#else
+    helper::view_pcd(pcd1, kdtree_cpu.pcd_buffer);
+#endif
 
 timer.reset();
     auto result = cuda_icp::ICP_Point2Plane_cpu(pcd1, scene);  // notice, pcd1 are changed due to icp

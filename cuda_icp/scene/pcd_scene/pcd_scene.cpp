@@ -39,7 +39,7 @@ void Scene_nn::init_Scene_nn_cpu(cv::Mat &scene_depth__, Mat3x3f &scene_K, KDTre
 
 // non-recursion non-stack building
 // make it easy to transform to cuda implementation
-// but I won't, build in cpu, coped to gpu is enough
+// the remained hard part is that idx of nodes are dependent
 void KDTree_cpu::build_tree(int max_num_pcd_in_leaf)
 {
     assert(pcd_buffer.size() > 0 && pcd_buffer.size() == normal_buffer.size()
@@ -56,7 +56,7 @@ void KDTree_cpu::build_tree(int max_num_pcd_in_leaf)
     nodes[0].left = 0;
     nodes[0].right = index.size();
 
-    size_t new_split_num = 0;
+    bool exist_new_nodes = false;
     size_t num_nodes_now = 1;
     size_t num_nodes_last_last_turn = 0;
     size_t num_nodes_now_last_turn = 0;
@@ -66,7 +66,7 @@ void KDTree_cpu::build_tree(int max_num_pcd_in_leaf)
 
         nodes.resize(num_nodes_now*2+1); // we may increase now + 1 in 1 turn
 
-        new_split_num = 0; // reset new split num
+        exist_new_nodes = false; // reset
         num_nodes_last_last_turn = num_nodes_now_last_turn;
         num_nodes_now_last_turn = num_nodes_now; // for iter, avoid reaching new node in 1 turn
 
@@ -151,13 +151,12 @@ void KDTree_cpu::build_tree(int max_num_pcd_in_leaf)
                 nodes[num_nodes_now + 1].right = nodes[node_iter].right;
                 nodes[num_nodes_now + 1].parent = node_iter;
 
-                num_nodes_now += 2;  // to parallel, use a buffer, then reduce
-//                    new_split_num ++;
-                new_split_num = true;  // ++ make it hard to parallel
+                num_nodes_now += 2;
+                if(!exist_new_nodes) exist_new_nodes = true;
             }
         }
 
-        if(new_split_num == 0){
+        if(!exist_new_nodes){
             stop = true;
         }
     }
