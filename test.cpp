@@ -189,7 +189,7 @@ static cv::Mat eulerAnglesToRotationMatrix(cv::Vec3f theta)
 }
 }
 
-static std::string prefix = "/home/meiqua/patch_linemod/public/datasets/hinterstoisser/";
+static std::string prefix = "/home/meiqua/pose_refine/test/";
 
 //#define USE_PROJ
 
@@ -208,7 +208,7 @@ void test_cuda_icp(){
 
     int width = 640; int height = 480;
 
-    cuda_renderer::Model model(prefix+"models/obj_06.ply");
+    cuda_renderer::Model model(prefix+"obj_06.ply");
 
     Mat K = (Mat_<float>(3,3) << 572.4114, 0.0, 325.2611, 0.0, 573.57043, 242.04899, 0.0, 0.0, 1.0);
     auto proj = cuda_renderer::compute_proj(K, width, height);
@@ -266,13 +266,14 @@ timer.reset();
     Scene_projective scene;
     vector<::Vec3f> pcd_buffer, normal_buffer;
     scene.init_Scene_projective_cpu(scene_depth, K_, pcd_buffer, normal_buffer);
+    //view init cloud; the far point is 0 in scene
+    helper::view_pcd(pcd1, pcd_buffer);
 #else
     Scene_nn scene;
     KDTree_cpu kdtree_cpu;
     scene.init_Scene_nn_cpu(scene_depth, K_, kdtree_cpu);
+    helper::view_pcd(pcd1, kdtree_cpu.pcd_buffer);
 #endif
-    //view init cloud; the far point is 0 in scene
-//    helper::view_pcd(pcd1, pcd_buffer);
 timer.out("init scene cpu");
 
 timer.reset();
@@ -283,7 +284,12 @@ timer.out("ICP_Point2Plane_cpu");
     auto R_v = helper::rotationMatrixToEulerAngles(R);
 
     //view icp cloud
-//    helper::view_pcd(pcd_buffer, pcd1);
+#ifdef USE_PROJ
+    helper::view_pcd(pcd_buffer, pcd1);
+#else
+    helper::view_pcd(kdtree_cpu.pcd_buffer, pcd1);
+#endif
+
 timer.reset();
     auto depth_cuda = cuda_renderer::render_cuda_keep_in_gpu(model.tris, mat4_v, width, height, proj);
 timer.out("gpu render");
