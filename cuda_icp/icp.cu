@@ -197,8 +197,9 @@ RegistrationResult __ICP_Point2Plane_cuda(device_vector_holder<Vec3f> &model_pcd
         stat = cublasSsyrk(cublas_handle, CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_N,
                             6, model_pcd.size(), &alpha, A_buffer_ptr, 6, &beta, A_dev_ptr, 6);
 #endif
-        cudaStreamSynchronize(cudaStreamPerThread);
+
         stat = cublasGetMatrix(6, 6, sizeof(float), A_dev_ptr , 6, A_host_ptr, 6);
+        cudaStreamSynchronize(cudaStreamPerThread);
 
 #ifndef USE_GEMM_rather_than_SYRK
 //        // set upper part of ATA
@@ -223,8 +224,9 @@ RegistrationResult __ICP_Point2Plane_cuda(device_vector_holder<Vec3f> &model_pcd
         stat = cublasSgemv(cublas_handle, CUBLAS_OP_N, 6, model_pcd.size(), &alpha, A_buffer_ptr,
                           6, b_buffer_ptr, 1, &beta, b_dev_ptr, 1);
 
-        cudaStreamSynchronize(cudaStreamPerThread);
+
         stat = cublasGetVector(6, sizeof(float), b_dev_ptr, 1, b_host_ptr, 1);
+        cudaStreamSynchronize(cudaStreamPerThread);
 
 //        {
 //            std::cout << " -----b------- "<< std::endl;

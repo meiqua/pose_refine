@@ -191,10 +191,15 @@ static cv::Mat eulerAnglesToRotationMatrix(cv::Vec3f theta)
 
 static std::string prefix = "/home/meiqua/patch_linemod/public/datasets/hinterstoisser/";
 
-//#define USE_PROJ
+#define USE_PROJ
 
 #ifdef CUDA_ON
 void test_cuda_icp(){
+
+    {  // gpu need sometime to warm up
+        cudaFree(0);
+//        cudaSetDevice(0);
+    }
 
     int width = 640; int height = 480;
 
@@ -245,12 +250,13 @@ void test_cuda_icp(){
     Mat3x3f K_((float*)K.data); // ugly but useful
 //    cout << K << endl;
 //    cout << K_ << endl;
-
+timer.reset();
     std::vector<::Vec3f> pcd1 = cuda_icp::depth2cloud_cpu(depth_cpu.data(), width, height, K_);
 //    helper::view_pcd(pcd1);
-
+timer.out("depth2cloud_cpu");
     cv::Mat scene_depth(height, width, CV_32S, depth_cpu.data() + width*height);
 
+timer.reset();
 #ifdef USE_PROJ
     Scene_projective scene;
     vector<::Vec3f> pcd_buffer, normal_buffer;
@@ -262,29 +268,36 @@ void test_cuda_icp(){
 #endif
     //view init cloud; the far point is 0 in scene
 //    helper::view_pcd(pcd1, pcd_buffer);
+timer.out("init scene cpu");
 
+timer.reset();
     auto result = cuda_icp::ICP_Point2Plane_cpu(pcd1, scene);  // notice, pcd1 are changed due to icp
+timer.out("ICP_Point2Plane_cpu");
     Mat result_cv = helper::mat4x4f2cv(result.transformation_);
     Mat R = result_cv(cv::Rect(0, 0, 3, 3));
     auto R_v = helper::rotationMatrixToEulerAngles(R);
 
     //view icp cloud
 //    helper::view_pcd(pcd_buffer, pcd1);
-
+timer.reset();
     auto depth_cuda = cuda_renderer::render_cuda_keep_in_gpu(model.tris, mat4_v, width, height, proj);
-// view gpu depth
+timer.out("gpu render");
+    // view gpu depth
 //    vector<int> depth_host(depth_cuda.size());
 //    thrust::copy(depth_cuda.begin_thr(), depth_cuda.end_thr(), depth_host.begin());
 //    cv::Mat depth_1_cuda = cv::Mat(height, width, CV_32SC1, depth_host.data());
 //    imshow("depth 1 cuda", helper::view_dep(depth_1_cuda));
 //    waitKey(0);
 
+timer.reset();
     auto pcd1_cuda = cuda_icp::depth2cloud_cuda(depth_cuda.data(), width, height, K_);
+timer.out("depth2cloud_cuda");
 // view gpu pcd
 //    std::vector<::Vec3f> pcd1_host(pcd1_cuda.size());
 //    thrust::copy(pcd1_cuda.begin_thr(), pcd1_cuda.end_thr(), pcd1_host.begin());
 //    helper::view_pcd(pcd1_host);
 
+timer.reset();
 #ifdef USE_PROJ
     device_vector_holder<::Vec3f> pcd_buffer_cuda, normal_buffer_cuda;
     scene.init_Scene_projective_cuda(scene_depth, K_, pcd_buffer_cuda, normal_buffer_cuda);
@@ -292,8 +305,11 @@ void test_cuda_icp(){
     KDTree_cuda kdtree_cuda;
     scene.init_Scene_nn_cuda(scene_depth, K_, kdtree_cuda);
 #endif
+timer.out("init scene cuda");
 
+timer.reset();
     auto result_cuda = cuda_icp::ICP_Point2Plane_cuda(pcd1_cuda, scene);
+timer.out("ICP_Point2Plane_cuda");
     Mat result_cv_cuda = helper::mat4x4f2cv(result_cuda.transformation_);
 
 
