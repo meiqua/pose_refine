@@ -309,7 +309,12 @@ timer.out("init scene cpu");
             if(p.z > 0)
             model_pcd.points_.emplace_back(float(p.x), float(p.y), float(p.z));
         }
-        for(auto& p: /*kdtree_cpu.*/pcd_buffer){
+#ifndef USE_PROJ
+        for(auto& p: kdtree_cpu.pcd_buffer)
+#else
+        for(auto& p: pcd_buffer)
+#endif
+        {
             if(p.z > 0)
             scene_pcd.points_.emplace_back(float(p.x), float(p.y), float(p.z));
         }
