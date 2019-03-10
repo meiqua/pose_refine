@@ -68,6 +68,7 @@ void view_dep_open3d(cv::Mat& modelDepth, cv::Mat modelK = cv::Mat()){
 void view_pcd(vector<::Vec3f>& pcd_in){
     open3d::PointCloud model_pcd;
     for(auto& p: pcd_in){
+        if(p.z > 0)
         model_pcd.points_.emplace_back(double(p.x), double(p.y), double(p.z));
     }
 
@@ -86,10 +87,12 @@ void view_pcd(vector<::Vec3f>& pcd_in){
 void view_pcd(vector<::Vec3f>& pcd_in, vector<::Vec3f>& pcd_in2){
     open3d::PointCloud model_pcd, model_pcd2;
     for(auto& p: pcd_in){
+        if(p.z > 0)
         model_pcd.points_.emplace_back(double(p.x), double(p.y), double(p.z));
     }
 
     for(auto& p: pcd_in2){
+        if(p.z > 0)
         model_pcd2.points_.emplace_back(double(p.x), double(p.y), double(p.z));
     }
 
@@ -303,9 +306,11 @@ timer.out("init scene cpu");
     {  // open3d
         open3d::PointCloud model_pcd, scene_pcd;
         for(auto& p: pcd1){
+            if(p.z > 0)
             model_pcd.points_.emplace_back(float(p.x), float(p.y), float(p.z));
         }
-        for(auto& p: kdtree_cpu.pcd_buffer){
+        for(auto& p: /*kdtree_cpu.*/pcd_buffer){
+            if(p.z > 0)
             scene_pcd.points_.emplace_back(float(p.x), float(p.y), float(p.z));
         }
 
