@@ -71,6 +71,8 @@ void view_pcd(vector<::Vec3f>& pcd_in){
         model_pcd.points_.emplace_back(double(p.x), double(p.y), double(p.z));
     }
 
+    open3d::EstimateNormals(model_pcd);
+
     double voxel_size = 0.005;
     auto model_pcd_down = open3d::VoxelDownSample(model_pcd, voxel_size);
 
@@ -91,6 +93,9 @@ void view_pcd(vector<::Vec3f>& pcd_in, vector<::Vec3f>& pcd_in2){
         model_pcd2.points_.emplace_back(double(p.x), double(p.y), double(p.z));
     }
 
+    open3d::EstimateNormals(model_pcd2);
+    open3d::EstimateNormals(model_pcd);
+
     double voxel_size = 0.005;
     auto model_pcd_down = open3d::VoxelDownSample(model_pcd, voxel_size);
     auto model_pcd_down2 = open3d::VoxelDownSample(model_pcd2, voxel_size);
@@ -102,6 +107,21 @@ void view_pcd(vector<::Vec3f>& pcd_in, vector<::Vec3f>& pcd_in2){
     model_pcd_down2->PaintUniformColor({0, 0.651, 0.929});
     open3d::DrawGeometries({model_pcd_down, model_pcd_down2});
 }
+
+void view_pcd(open3d::PointCloud& model_pcd, open3d::PointCloud& model_pcd2){
+
+    open3d::EstimateNormals(model_pcd2);
+    open3d::EstimateNormals(model_pcd);
+
+    double voxel_size = 0.005;
+    auto model_pcd_down = open3d::VoxelDownSample(model_pcd, voxel_size);
+    auto model_pcd_down2 = open3d::VoxelDownSample(model_pcd2, voxel_size);
+
+    model_pcd_down->PaintUniformColor({1, 0.706, 0});
+    model_pcd_down2->PaintUniformColor({0, 0.651, 0.929});
+    open3d::DrawGeometries({model_pcd_down, model_pcd_down2});
+}
+
 
 cv::Mat view_dep(cv::Mat dep){
     cv::Mat map = dep;
@@ -279,6 +299,31 @@ timer.out("init scene cpu");
 #else
     helper::view_pcd(pcd1, kdtree_cpu.pcd_buffer);
 #endif
+
+    {  // open3d
+        open3d::PointCloud model_pcd, scene_pcd;
+        for(auto& p: pcd1){
+            model_pcd.points_.emplace_back(float(p.x), float(p.y), float(p.z));
+        }
+        for(auto& p: kdtree_cpu.pcd_buffer){
+            scene_pcd.points_.emplace_back(float(p.x), float(p.y), float(p.z));
+        }
+
+        open3d::EstimateNormals(scene_pcd);
+        open3d::EstimateNormals(model_pcd);
+
+        timer.reset();
+        auto final_result = open3d::RegistrationICP(model_pcd, scene_pcd, 0.1,
+                                                    Eigen::Matrix4d::Identity(4, 4),
+                                                    open3d::TransformationEstimationPointToPlane());
+        timer.out("open3d icp");
+
+        model_pcd.Transform(final_result.transformation_);
+        cout << "open3d final rmse: " << final_result.inlier_rmse_ << endl;
+        cout << "open3d final fitness: " << final_result.fitness_ << endl;
+        cout << "open3d final transformation_:\n" << final_result.transformation_ << endl << endl;
+        helper::view_pcd(model_pcd, scene_pcd);
+    }
 
 timer.reset();
     auto result = cuda_icp::ICP_Point2Plane_cpu(pcd1, scene);  // notice, pcd1 are changed due to icp
