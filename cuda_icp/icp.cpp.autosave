@@ -153,8 +153,6 @@ RegistrationResult ICP_Point2Plane_cpu(std::vector<Vec3f> &model_pcd, const Scen
 //        std::cout << extrinsic;
 //        std::cout << "\n~~~~~~~~~~~~~~\n" << std::endl;
 
-
-
         transform_pcd(model_pcd, extrinsic);
         result.transformation_ = extrinsic * result.transformation_;
     }

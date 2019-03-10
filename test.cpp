@@ -191,7 +191,7 @@ static cv::Mat eulerAnglesToRotationMatrix(cv::Vec3f theta)
 
 static std::string prefix = "/home/meiqua/patch_linemod/public/datasets/hinterstoisser/";
 
-#define USE_PROJ
+//#define USE_PROJ
 
 #ifdef CUDA_ON
 void test_cuda_icp(){
@@ -199,6 +199,11 @@ void test_cuda_icp(){
     {  // gpu need sometime to warm up
         cudaFree(0);
 //        cudaSetDevice(0);
+
+        // cublas also need
+        cublasStatus_t stat;  // CUBLAS functions status
+        cublasHandle_t cublas_handle;  // CUBLAS context
+        stat = cublasCreate(&cublas_handle);
     }
 
     int width = 640; int height = 480;
@@ -306,6 +311,9 @@ timer.reset();
     scene.init_Scene_nn_cuda(scene_depth, K_, kdtree_cuda);
 #endif
 timer.out("init scene cuda");
+
+    cuda_icp::ICP_cuda_buffer_holder icp_hold_buffer(pcd1_cuda.size());
+    timer.out("holder total time, in 1 turn may save");
 
 timer.reset();
     auto result_cuda = cuda_icp::ICP_Point2Plane_cuda(pcd1_cuda, scene);
