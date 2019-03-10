@@ -84,7 +84,7 @@ __global__ void get_Ab(const Scene scene, Vec3f* model_pcd_ptr, uint32_t model_p
 }
 
 template<class Scene>
-RegistrationResult __ICP_Point2Plane_cuda(device_vector_holder<Vec3f> &model_pcd, const Scene scene,
+RegistrationResult ICP_Point2Plane_cuda(device_vector_holder<Vec3f> &model_pcd, const Scene scene,
                                         const ICPConvergenceCriteria criteria)
 {
     RegistrationResult result;
@@ -101,6 +101,9 @@ RegistrationResult __ICP_Point2Plane_cuda(device_vector_holder<Vec3f> &model_pcd
     thrust::device_vector<float> A_dev(36);
     thrust::device_vector<float> b_dev(6);
 
+    thrust::host_vector<float> A_host(36, 0);
+    thrust::host_vector<float> b_host(36, 0);
+
     // cast to pointer, ready to feed kernel
     Vec3f* model_pcd_ptr = model_pcd.data();
     float* A_buffer_ptr =  thrust::raw_pointer_cast(A_buffer.data());
@@ -110,6 +113,9 @@ RegistrationResult __ICP_Point2Plane_cuda(device_vector_holder<Vec3f> &model_pcd
 
     float* A_dev_ptr =  thrust::raw_pointer_cast(A_dev.data());
     float* b_dev_ptr =  thrust::raw_pointer_cast(b_dev.data());
+
+    float* A_host_ptr = A_host.data();
+    float* b_host_ptr = b_host.data();
 
     const uint32_t threadsPerBlock = 256;
     const uint32_t numBlocks = (model_pcd.size() + threadsPerBlock - 1)/threadsPerBlock;
@@ -124,12 +130,6 @@ RegistrationResult __ICP_Point2Plane_cuda(device_vector_holder<Vec3f> &model_pcd
     // avoid blocking for multi-thread
     cublasSetStream_v2(cublas_handle, cudaStreamPerThread);
     /// cublas <-----------------------------------------
-
-    thrust::host_vector<float> A_host(36, 0);
-    thrust::host_vector<float> b_host(36, 0);
-
-    float* A_host_ptr = A_host.data();
-    float* b_host_ptr = b_host.data();
 
 //#define USE_GEMM_rather_than_SYRK
 
@@ -255,15 +255,11 @@ RegistrationResult __ICP_Point2Plane_cuda(device_vector_holder<Vec3f> &model_pcd
     return result;
 }
 
-RegistrationResult ICP_Point2Plane_cuda(device_vector_holder<Vec3f> &model_pcd, const Scene_projective scene,
-                                        const ICPConvergenceCriteria criteria){
-    return __ICP_Point2Plane_cuda(model_pcd, scene, criteria);
-}
+template RegistrationResult ICP_Point2Plane_cuda(device_vector_holder<Vec3f>&,
+const Scene_projective, const ICPConvergenceCriteria);
 
-RegistrationResult ICP_Point2Plane_cuda(device_vector_holder<Vec3f> &model_pcd, const Scene_nn scene,
-                                        const ICPConvergenceCriteria criteria){
-    return __ICP_Point2Plane_cuda(model_pcd, scene, criteria);
-}
+template RegistrationResult ICP_Point2Plane_cuda(device_vector_holder<Vec3f>&,
+const Scene_nn, const ICPConvergenceCriteria);
 
 
 template <class T>
@@ -295,7 +291,7 @@ __global__ void depth2cloud(T* depth, Vec3f* pcd, uint32_t width, uint32_t heigh
 }
 
 template <class T>
-device_vector_holder<Vec3f> __depth2cloud_cuda(T *depth, uint32_t width, uint32_t height, Mat3x3f& K,
+device_vector_holder<Vec3f> depth2cloud_cuda(T *depth, uint32_t width, uint32_t height, Mat3x3f& K,
                                  uint32_t stride, uint32_t tl_x, uint32_t tl_y)
 {
     thrust::device_vector<uint32_t> mask(width*height/stride/stride, 0);
@@ -326,14 +322,10 @@ device_vector_holder<Vec3f> __depth2cloud_cuda(T *depth, uint32_t width, uint32_
     return cloud;
 }
 
-device_vector_holder<Vec3f> depth2cloud_cuda(int32_t *depth, uint32_t width, uint32_t height, Mat3x3f& K,
-                                 uint32_t stride, uint32_t tl_x, uint32_t tl_y){
-    return  __depth2cloud_cuda(depth, width, height, K, stride, tl_x, tl_y);
-}
-device_vector_holder<Vec3f> depth2cloud_cuda(uint16_t *depth, uint32_t width, uint32_t height, Mat3x3f& K,
-                                 uint32_t stride, uint32_t tl_x, uint32_t tl_y){
-    return  __depth2cloud_cuda(depth, width, height, K, stride, tl_x, tl_y);
-}
+template device_vector_holder<Vec3f> depth2cloud_cuda(uint16_t *depth, uint32_t width, uint32_t height, Mat3x3f& K,
+                                 uint32_t stride, uint32_t tl_x, uint32_t tl_y);
+template device_vector_holder<Vec3f> depth2cloud_cuda(int32_t *depth, uint32_t width, uint32_t height, Mat3x3f& K,
+                                 uint32_t stride, uint32_t tl_x, uint32_t tl_y);
 
 }
 

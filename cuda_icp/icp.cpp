@@ -50,7 +50,7 @@ void transform_pcd(std::vector<Vec3f>& model_pcd, Mat4x4f& trans){
 }
 
 template<class Scene>
-RegistrationResult __ICP_Point2Plane_cpu(std::vector<Vec3f> &model_pcd, const Scene scene,
+RegistrationResult ICP_Point2Plane_cpu(std::vector<Vec3f> &model_pcd, const Scene scene,
                                        const ICPConvergenceCriteria criteria)
 {
     RegistrationResult result;
@@ -163,15 +163,11 @@ RegistrationResult __ICP_Point2Plane_cpu(std::vector<Vec3f> &model_pcd, const Sc
     return result;
 }
 
-RegistrationResult ICP_Point2Plane_cpu(std::vector<Vec3f> &model_pcd, const Scene_projective scene,
-                                       const ICPConvergenceCriteria criteria){
-    return __ICP_Point2Plane_cpu(model_pcd, scene, criteria);
-}
 
-RegistrationResult ICP_Point2Plane_cpu(std::vector<Vec3f> &model_pcd, const Scene_nn scene,
-                                       const ICPConvergenceCriteria criteria){
-    return __ICP_Point2Plane_cpu(model_pcd, scene, criteria);
-}
+template RegistrationResult ICP_Point2Plane_cpu(std::vector<Vec3f> &model_pcd, const Scene_projective scene,
+const ICPConvergenceCriteria criteria);
+template RegistrationResult ICP_Point2Plane_cpu(std::vector<Vec3f> &model_pcd, const Scene_nn scene,
+const ICPConvergenceCriteria criteria);
 
 template<class T>
 void cpu_exclusive_scan_serial(T* start, uint32_t N){
@@ -186,7 +182,7 @@ void cpu_exclusive_scan_serial(T* start, uint32_t N){
 }
 
 template<class T>
-std::vector<Vec3f> __depth2cloud_cpu(T* depth, uint32_t width, uint32_t height, Mat3x3f& K,
+std::vector<Vec3f> depth2cloud_cpu(T* depth, uint32_t width, uint32_t height, Mat3x3f& K,
                                 uint32_t stride, uint32_t tl_x, uint32_t tl_y)
 {
     std::vector<uint32_t> mask(width*height/stride/stride, 0);
@@ -231,14 +227,10 @@ std::vector<Vec3f> __depth2cloud_cpu(T* depth, uint32_t width, uint32_t height, 
     return cloud;
 }
 
-std::vector<Vec3f> depth2cloud_cpu(int32_t* depth, uint32_t width, uint32_t height, Mat3x3f& K,
-                               uint32_t stride, uint32_t tl_x, uint32_t tl_y){
-    return __depth2cloud_cpu(depth, width, height, K, stride, tl_x, tl_y);
-}
-std::vector<Vec3f> depth2cloud_cpu(uint16_t* depth, uint32_t width, uint32_t height, Mat3x3f& K,
-                               uint32_t stride, uint32_t tl_x, uint32_t tl_y){
-    return __depth2cloud_cpu(depth, width, height, K, stride, tl_x, tl_y);
-}
+template std::vector<Vec3f> depth2cloud_cpu(int32_t* depth, uint32_t width, uint32_t height, Mat3x3f& K,
+                                uint32_t stride, uint32_t tl_x, uint32_t tl_y);
+template std::vector<Vec3f> depth2cloud_cpu(uint16_t* depth, uint32_t width, uint32_t height, Mat3x3f& K,
+                                uint32_t stride, uint32_t tl_x, uint32_t tl_y);
 }
 
 
