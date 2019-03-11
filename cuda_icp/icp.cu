@@ -48,7 +48,7 @@ RegistrationResult ICP_Point2Plane_cuda(device_vector_holder<Vec3f> &model_pcd, 
         Vec29f Ab_tight = thrust::transform_reduce(thrust::cuda::par.on(cudaStreamPerThread),
                                         model_pcd.begin_thr(), model_pcd.end_thr(), thrust__pcd2Ab<Scene>(scene),
                                         Vec29f::Zero(), thrust__plus());
-
+        cudaStreamSynchronize(cudaStreamPerThread);
         backup = result;
 
         float& count = Ab_tight[28];
