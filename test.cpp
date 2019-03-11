@@ -298,7 +298,7 @@ timer.out("init scene cpu");
 
 #ifdef USE_PROJ
     //view init cloud; the far point is 0 in scene
-    helper::view_pcd(pcd1, pcd_buffer);
+//    helper::view_pcd(pcd1, pcd_buffer);
 #else
 //    helper::view_pcd(pcd1, kdtree_cpu.pcd_buffer);
 #endif
@@ -344,7 +344,7 @@ timer.out("ICP_Point2Plane_cpu");
 
     //view icp cloud
 #ifdef USE_PROJ
-    helper::view_pcd(pcd_buffer, pcd1);
+//    helper::view_pcd(pcd_buffer, pcd1);
 #else
 //    helper::view_pcd(kdtree_cpu.pcd_buffer, pcd1);
 #endif

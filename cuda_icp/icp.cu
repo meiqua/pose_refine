@@ -165,7 +165,7 @@ template device_vector_holder<Vec3f> depth2cloud_cuda(int32_t *depth, uint32_t w
 
 
 
-// legacy
+/// !!!!!!!!!!!!!!!!!!!!! legacy
 // just for test and comparation
 
 template<typename T>
