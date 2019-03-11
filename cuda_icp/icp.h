@@ -69,7 +69,8 @@ RegistrationResult ICP_Point2Plane_cuda(device_vector_holder<Vec3f> &model_pcd, 
 
 
 
-// low level
+/// !!!!!!!!!!!!!!!!!! low level
+
 typedef vec<29,  float> Vec29f;
 // tight: A(symetric 6x6 --> 15+6) + ATb 6 + mse(b*b 1) + count 1 = 29
 

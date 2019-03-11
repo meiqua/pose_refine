@@ -184,7 +184,7 @@ template RegistrationResult ICP_Point2Plane_cpu(std::vector<Vec3f> &model_pcd, c
 const ICPConvergenceCriteria criteria);
 
 
-// legacy
+/// !!!!!!!!!!!!!!!!!!!!! legacy
 // just for test and comparation
 template<class Scene>
 RegistrationResult ICP_Point2Plane_cpu_global_memory_version(std::vector<Vec3f> &model_pcd, const Scene scene,
