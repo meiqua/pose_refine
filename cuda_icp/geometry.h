@@ -30,8 +30,35 @@ template <size_t DIM, typename T> struct vec {
           T& operator[](const size_t i)       { assert(i<DIM); return data_[i]; }
     __device__ __host__
     const T& operator[](const size_t i) const { assert(i<DIM); return data_[i]; }
+
+    __device__ __host__
+    vec<DIM, T> operator+ (const vec<DIM, T>& other){
+        vec<DIM, T> res;
+        for(int i=0; i<DIM; i++){
+            res.data_[i] = data_[i] + other.data_[i];
+        }
+        return res;
+    }
+
+    __device__ __host__
+    vec<DIM, T>& operator+= (const vec<DIM, T>& other){
+        for(int i=0; i<DIM; i++){
+            this->data_[i] +=  other.data_[i];
+        }
+        return *this;
+    }
+
+    __device__ __host__
+    static vec<DIM, T> Zero(){
+        vec<DIM, T> res;
+        for(int i=0; i<DIM; i++){
+            res.data_[i] = 0;
+        }
+        return res;
+    }
+
 private:
-    T data_[DIM];
+    T data_[DIM] = {0};
 };
 
 /////////////////////////////////////////////////////////////////////////////////

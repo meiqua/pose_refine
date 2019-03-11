@@ -300,7 +300,7 @@ timer.out("init scene cpu");
     //view init cloud; the far point is 0 in scene
     helper::view_pcd(pcd1, pcd_buffer);
 #else
-    helper::view_pcd(pcd1, kdtree_cpu.pcd_buffer);
+//    helper::view_pcd(pcd1, kdtree_cpu.pcd_buffer);
 #endif
 
     {  // open3d
@@ -332,7 +332,7 @@ timer.out("init scene cpu");
         cout << "open3d final rmse: " << final_result.inlier_rmse_ << endl;
         cout << "open3d final fitness: " << final_result.fitness_ << endl;
         cout << "open3d final transformation_:\n" << final_result.transformation_ << endl << endl;
-        helper::view_pcd(model_pcd, scene_pcd);
+//        helper::view_pcd(model_pcd, scene_pcd);
     }
 
 timer.reset();
@@ -346,7 +346,7 @@ timer.out("ICP_Point2Plane_cpu");
 #ifdef USE_PROJ
     helper::view_pcd(pcd_buffer, pcd1);
 #else
-    helper::view_pcd(kdtree_cpu.pcd_buffer, pcd1);
+//    helper::view_pcd(kdtree_cpu.pcd_buffer, pcd1);
 #endif
 
 timer.reset();
@@ -377,8 +377,6 @@ timer.reset();
 #endif
 timer.out("init scene cuda");
 
-    cuda_icp::ICP_cuda_buffer_holder icp_hold_buffer(pcd1_cuda.size());
-    timer.out("holder total time, in 1 turn may save");
 
 timer.reset();
     auto result_cuda = cuda_icp::ICP_Point2Plane_cuda(pcd1_cuda, scene);
