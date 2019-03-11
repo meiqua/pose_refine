@@ -159,7 +159,7 @@ struct thrust__plus{
     }
 };
 
-// legacy
+/// !!!!!!!!!!!!!!!!!!!!!!!legacy
 // just for test and comparation
 template <class Scene>
 RegistrationResult ICP_Point2Plane_cuda_global_memory_version(device_vector_holder<Vec3f>& model_pcd,
