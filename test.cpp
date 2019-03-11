@@ -224,9 +224,9 @@ void test_cuda_icp(){
 //        cudaSetDevice(0);
 
         // cublas also need
-        cublasStatus_t stat;  // CUBLAS functions status
+//        cublasStatus_t stat;  // CUBLAS functions status
         cublasHandle_t cublas_handle;  // CUBLAS context
-        stat = cublasCreate(&cublas_handle);
+        /*stat = */cublasCreate(&cublas_handle);
     }
 
     int width = 640; int height = 480;

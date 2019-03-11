@@ -79,7 +79,7 @@ public:
     // may waste memory, but make it easy to parallel
     thrust::device_vector<float> A_buffer;
     thrust::device_vector<float> b_buffer;
-    thrust::device_vector<float> b_squre_buffer;
+//    thrust::device_vector<float> b_squre_buffer;
     thrust::device_vector<uint32_t> valid_buffer;
 
     thrust::device_vector<float> A_dev;
@@ -88,7 +88,7 @@ public:
     thrust::host_vector<float> A_host;
     thrust::host_vector<float> b_host;
 
-    cublasStatus_t stat;  // CUBLAS functions status
+//    cublasStatus_t stat;  // CUBLAS functions status
     cublasHandle_t cublas_handle;  // CUBLAS context
     float alpha =1.0f;
     float beta =0.0f;

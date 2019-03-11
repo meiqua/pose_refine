@@ -91,7 +91,7 @@ RegistrationResult ICP_Point2Plane_cuda(device_vector_holder<Vec3f> &model_pcd, 
     // may waste memory, but make it easy to parallel
     thrust::device_vector<float> A_buffer(model_pcd.size()*6, 0);
     thrust::device_vector<float> b_buffer(model_pcd.size(), 0);
-    thrust::device_vector<float> b_squre_buffer(model_pcd.size());
+//    thrust::device_vector<float> b_squre_buffer(model_pcd.size());
     thrust::device_vector<uint32_t> valid_buffer(model_pcd.size(), 0);
     // uint8_t is enough, uint32_t for risk in reduction
 
@@ -122,9 +122,9 @@ RegistrationResult ICP_Point2Plane_cuda(device_vector_holder<Vec3f> &model_pcd, 
     const uint32_t numBlocks = (model_pcd.size() + threadsPerBlock - 1)/threadsPerBlock;
 
     /// cublas ----------------------------------------->
-    cublasStatus_t stat;  // CUBLAS functions status
+//    cublasStatus_t stat;  // CUBLAS functions status
     cublasHandle_t cublas_handle;  // CUBLAS context
-    stat = cublasCreate(&cublas_handle);
+    /*stat = */cublasCreate(&cublas_handle);
     float alpha =1.0f;
     float beta =0.0f;
 
@@ -151,15 +151,16 @@ RegistrationResult ICP_Point2Plane_cuda(device_vector_holder<Vec3f> &model_pcd, 
         uint32_t count = thrust::reduce(thrust::cuda::par.on(cudaStreamPerThread),
                                    valid_buffer.begin(), valid_buffer.end());
 
-        thrust::transform(thrust::cuda::par.on(cudaStreamPerThread), b_buffer.begin(),
-                          b_buffer.end(), b_squre_buffer.begin(), thrust__squre<float>());
-        float total_error = thrust::reduce(thrust::cuda::par.on(cudaStreamPerThread),
-                                           b_squre_buffer.begin(), b_squre_buffer.end());
+//        thrust::transform(thrust::cuda::par.on(cudaStreamPerThread), b_buffer.begin(),
+//                          b_buffer.end(), b_squre_buffer.begin(), thrust__squre<float>());
+//        float total_error = thrust::reduce(thrust::cuda::par.on(cudaStreamPerThread),
+//                                           b_squre_buffer.begin(), b_squre_buffer.end());
 
         //don't know why, transform reduce always return 0
-//        float total_error = thrust::transform_reduce(thrust::cuda::par.on(cudaStreamPerThread),
-//                                                     b_buffer.begin(), b_buffer.end(),
-//                                                     thrust__squre<float>(), 0, thrust::plus<float>());
+        // ....... should be float(0) T_T
+        float total_error = thrust::transform_reduce(thrust::cuda::par.on(cudaStreamPerThread),
+                                                     b_buffer.begin(), b_buffer.end(),
+                                                     thrust__squre<float>(), float(0), thrust::plus<float>());
         cudaStreamSynchronize(cudaStreamPerThread);
 //        gpuErrchk(cudaPeekAtLastError());
 
@@ -191,15 +192,15 @@ RegistrationResult ICP_Point2Plane_cuda(device_vector_holder<Vec3f> &model_pcd, 
 #ifdef USE_GEMM_rather_than_SYRK
         thrust::copy(thrust::cuda::par.on(cudaStreamPerThread), A_buffer.begin(), A_buffer.end(), AT_buffer.begin());
         cudaStreamSynchronize(cudaStreamPerThread);
-        stat = cublasSgemm(cublas_handle, CUBLAS_OP_N, CUBLAS_OP_T, 6,  6, model_pcd.size(),
+        /*stat = */cublasSgemm(cublas_handle, CUBLAS_OP_N, CUBLAS_OP_T, 6,  6, model_pcd.size(),
                            &alpha, A_buffer_ptr, 6,
                            AT_buffer_ptr, 6, &beta, A_dev_ptr, 6);
 #else
-        stat = cublasSsyrk(cublas_handle, CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_N,
+       /* stat = */cublasSsyrk(cublas_handle, CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_N,
                             6, model_pcd.size(), &alpha, A_buffer_ptr, 6, &beta, A_dev_ptr, 6);
 #endif
 
-        stat = cublasGetMatrix(6, 6, sizeof(float), A_dev_ptr , 6, A_host_ptr, 6);
+        /*stat = */cublasGetMatrix(6, 6, sizeof(float), A_dev_ptr , 6, A_host_ptr, 6);
         cudaStreamSynchronize(cudaStreamPerThread);
 
 #ifndef USE_GEMM_rather_than_SYRK
@@ -222,11 +223,11 @@ RegistrationResult ICP_Point2Plane_cuda(device_vector_holder<Vec3f> &model_pcd, 
 //        }
 
         // b = A_buffer.transpose()*b_buffer;
-        stat = cublasSgemv(cublas_handle, CUBLAS_OP_N, 6, model_pcd.size(), &alpha, A_buffer_ptr,
+        /*stat = */cublasSgemv(cublas_handle, CUBLAS_OP_N, 6, model_pcd.size(), &alpha, A_buffer_ptr,
                           6, b_buffer_ptr, 1, &beta, b_dev_ptr, 1);
 
 
-        stat = cublasGetVector(6, sizeof(float), b_dev_ptr, 1, b_host_ptr, 1);
+        /*stat = */cublasGetVector(6, sizeof(float), b_dev_ptr, 1, b_host_ptr, 1);
         cudaStreamSynchronize(cudaStreamPerThread);
 
 //        {
@@ -335,7 +336,7 @@ ICP_cuda_buffer_holder::ICP_cuda_buffer_holder(size_t pcd_size)
     // may waste memory, but make it easy to parallel
     A_buffer = thrust::device_vector<float>(pcd_size*6, 0);
     b_buffer = thrust::device_vector<float>(pcd_size, 0);
-    b_squre_buffer = thrust::device_vector<float>(pcd_size);
+//    b_squre_buffer = thrust::device_vector<float>(pcd_size);
     valid_buffer = thrust::device_vector<uint32_t>(pcd_size, 0);
     // uint8_t is enough, uint32_t for risk in reduction
 
@@ -345,7 +346,7 @@ ICP_cuda_buffer_holder::ICP_cuda_buffer_holder(size_t pcd_size)
     A_host = thrust::host_vector<float>(36, 0);
     b_host = thrust::host_vector<float>(36, 0);
 
-    stat = cublasCreate(&cublas_handle);
+    /*stat = */cublasCreate(&cublas_handle);
     // avoid blocking for multi-thread
     cublasSetStream_v2(cublas_handle, cudaStreamPerThread);
 }
@@ -406,15 +407,16 @@ RegistrationResult ICP_cuda_buffer_holder::ICP_Point2Plane_cuda(device_vector_ho
         uint32_t count = thrust::reduce(thrust::cuda::par.on(cudaStreamPerThread),
                                    valid_buffer.begin(), valid_buffer.end());
 
-        thrust::transform(thrust::cuda::par.on(cudaStreamPerThread), b_buffer.begin(),
-                          b_buffer.end(), b_squre_buffer.begin(), thrust__squre<float>());
-        float total_error = thrust::reduce(thrust::cuda::par.on(cudaStreamPerThread),
-                                           b_squre_buffer.begin(), b_squre_buffer.end());
+//        thrust::transform(thrust::cuda::par.on(cudaStreamPerThread), b_buffer.begin(),
+//                          b_buffer.end(), b_squre_buffer.begin(), thrust__squre<float>());
+//        float total_error = thrust::reduce(thrust::cuda::par.on(cudaStreamPerThread),
+//                                           b_squre_buffer.begin(), b_squre_buffer.end());
 
         //don't know why, transform reduce always return 0
-//        float total_error = thrust::transform_reduce(thrust::cuda::par.on(cudaStreamPerThread),
-//                                                     b_buffer.begin(), b_buffer.end(),
-//                                                     thrust__squre<float>(), 0, thrust::plus<float>());
+        // ....... should be float(0) T_T
+        float total_error = thrust::transform_reduce(thrust::cuda::par.on(cudaStreamPerThread),
+                                                     b_buffer.begin(), b_buffer.end(),
+                                                     thrust__squre<float>(), float(0), thrust::plus<float>());
         cudaStreamSynchronize(cudaStreamPerThread);
 //        gpuErrchk(cudaPeekAtLastError());
 
@@ -446,15 +448,15 @@ RegistrationResult ICP_cuda_buffer_holder::ICP_Point2Plane_cuda(device_vector_ho
 #ifdef USE_GEMM_rather_than_SYRK
         thrust::copy(thrust::cuda::par.on(cudaStreamPerThread), A_buffer.begin(), A_buffer.end(), AT_buffer.begin());
         cudaStreamSynchronize(cudaStreamPerThread);
-        stat = cublasSgemm(cublas_handle, CUBLAS_OP_N, CUBLAS_OP_T, 6,  6, model_pcd.size(),
+        /*stat = */cublasSgemm(cublas_handle, CUBLAS_OP_N, CUBLAS_OP_T, 6,  6, model_pcd.size(),
                            &alpha, A_buffer_ptr, 6,
                            AT_buffer_ptr, 6, &beta, A_dev_ptr, 6);
 #else
-        stat = cublasSsyrk(cublas_handle, CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_N,
+        /*stat = */cublasSsyrk(cublas_handle, CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_N,
                             6, model_pcd.size(), &alpha, A_buffer_ptr, 6, &beta, A_dev_ptr, 6);
 #endif
 
-        stat = cublasGetMatrix(6, 6, sizeof(float), A_dev_ptr , 6, A_host_ptr, 6);
+        /*stat = */cublasGetMatrix(6, 6, sizeof(float), A_dev_ptr , 6, A_host_ptr, 6);
         cudaStreamSynchronize(cudaStreamPerThread);
 
 #ifndef USE_GEMM_rather_than_SYRK
@@ -477,11 +479,11 @@ RegistrationResult ICP_cuda_buffer_holder::ICP_Point2Plane_cuda(device_vector_ho
 //        }
 
         // b = A_buffer.transpose()*b_buffer;
-        stat = cublasSgemv(cublas_handle, CUBLAS_OP_N, 6, model_pcd.size(), &alpha, A_buffer_ptr,
+        /*stat = */cublasSgemv(cublas_handle, CUBLAS_OP_N, 6, model_pcd.size(), &alpha, A_buffer_ptr,
                           6, b_buffer_ptr, 1, &beta, b_dev_ptr, 1);
 
 
-        stat = cublasGetVector(6, sizeof(float), b_dev_ptr, 1, b_host_ptr, 1);
+        /*stat = */cublasGetVector(6, sizeof(float), b_dev_ptr, 1, b_host_ptr, 1);
         cudaStreamSynchronize(cudaStreamPerThread);
 
 //        {
