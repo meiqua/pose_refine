@@ -9,7 +9,7 @@
 
 using namespace cv;
 
-static std::string prefix = "/home/meiqua/patch_linemod/public/datasets/hinterstoisser/";
+static std::string prefix = "/home/meiqua/pose_refine/test/";
 
 namespace helper {
 cv::Mat view_dep(cv::Mat dep){
@@ -48,7 +48,7 @@ int main(int argc, char const *argv[])
 {
     const int width = 640; const int height = 480;
 
-    cuda_renderer::Model model(prefix+"models/obj_06.ply");
+    cuda_renderer::Model model(prefix+"obj_06.ply");
 
     Mat K = (Mat_<float>(3,3) << 572.4114, 0.0, 325.2611, 0.0, 573.57043, 242.04899, 0.0, 0.0, 1.0);
     auto proj = cuda_renderer::compute_proj(K, width, height);
