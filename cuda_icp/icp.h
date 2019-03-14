@@ -66,7 +66,7 @@ device_vector_holder<Vec3f> depth2cloud_cuda(T* depth, uint32_t width, uint32_t 
 template<class Scene>
 RegistrationResult ICP_Point2Plane_cuda(device_vector_holder<Vec3f> &model_pcd, const Scene scene,
                                         const ICPConvergenceCriteria criteria = ICPConvergenceCriteria());
-
+#endif
 
 
 /// !!!!!!!!!!!!!!!!!! low level
@@ -160,6 +160,8 @@ struct thrust__plus{
 };
 
 /// !!!!!!!!!!!!!!!!!!!!!!!legacy
+
+#ifdef CUDA_ON
 // just for test and comparation
 template <class Scene>
 RegistrationResult ICP_Point2Plane_cuda_global_memory_version(device_vector_holder<Vec3f>& model_pcd,
