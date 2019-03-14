@@ -40,6 +40,8 @@ public:
     device_vector_holder<Vec3f> pcd_buffer;
     device_vector_holder<Vec3f> normal_buffer;
     device_vector_holder<Node_kdtree> nodes;
+
+    void build_tree(int max_num_pcd_in_leaf = 10);
 };
 #endif
 

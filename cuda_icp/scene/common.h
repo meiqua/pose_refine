@@ -75,4 +75,16 @@ template<typename T>
 __device__ __host__ inline
 T pow2(T in){return in * in;}
 
+__device__ __host__ inline
+unsigned int mylog2(unsigned int val) {
+    assert(val > 0);
+    if (val == 1) return 0;
+    unsigned int ret = 0;
+    while (val > 1) {
+        val >>= 1;
+        ret++;
+    }
+    return ret;
+}
+
 std::vector<Vec3f> get_normal(const cv::Mat& depth, const Mat3x3f& K);

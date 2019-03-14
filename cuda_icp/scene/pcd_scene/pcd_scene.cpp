@@ -36,7 +36,6 @@ void Scene_nn::init_Scene_nn_cpu(cv::Mat &scene_depth__, Mat3x3f &scene_K, KDTre
     node_ptr = kdtree.nodes.data();
 }
 
-
 // non-recursion non-stack building
 // make it easy to transform to cuda implementation
 // the remained hard part is that idx of nodes are dependent
@@ -51,6 +50,9 @@ void KDTree_cpu::build_tree(int max_num_pcd_in_leaf)
     std::iota (std::begin(index), std::end(index), 0); // Fill with 0, 1, 2, ...
 
     std::vector<int> index_buffer(index.size());
+
+    // reserve a plausible size to avoid allocing too many times
+    nodes.reserve(mylog2(pcd_buffer.size()) + 10);
 
     //root
     nodes.resize(1);
