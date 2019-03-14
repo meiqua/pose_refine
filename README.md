@@ -8,7 +8,7 @@ cuda_icp: cuda version of point to plane icp, implement projective & nearest nei
 
 key ideas:  
 
-1. build & search a kdtree in non-iterative, non-stack way, because on gpu our stack is small for each thread, and we also don't want dynamic malloc to mimic a stack.
+1. build & search a kdtree in non-recursion, also stackless way, because on gpu our stack is small for each thread, and we also don't want dynamic malloc to mimic a stack.
 
 2. regard icp as a huge transform_reduce process, one thrust call is enough, save much time compared to global memory version  
 
