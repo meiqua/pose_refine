@@ -40,6 +40,7 @@ void Scene_nn::init_Scene_nn_cpu(cv::Mat &scene_depth__, Mat3x3f &scene_K, KDTre
 // non-recursion non-stack building
 // make it easy to transform to cuda implementation
 // the remained hard part is that idx of nodes are dependent
+// use cuda atomicAdd(fetch and add) looks fine
 void KDTree_cpu::build_tree(int max_num_pcd_in_leaf)
 {
     assert(pcd_buffer.size() > 0 && pcd_buffer.size() == normal_buffer.size()
