@@ -1,7 +1,9 @@
 # in top level dir, run following cmd:
 # . nv_prof.sh
 
+mkdir -p build
 cd ./build
+cmake ..
 make
 cd ../
 
