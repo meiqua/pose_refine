@@ -19,15 +19,11 @@ endif()
 add_subdirectory(cuda_icp)
 list(APPEND pose_refine_lib cuda_icp)
 
+
 # opencv
 find_package(OpenCV 3 REQUIRED)
 list(APPEND pose_refine_inc ${OpenCV_INCLUDE_DIRS})
 list(APPEND pose_refine_lib ${OpenCV_LIBS})
-
-
-# eigen
-find_package(Eigen3 REQUIRED)
-include_directories(${EIGEN3_INCLUDE_DIR})
 
 
 # src

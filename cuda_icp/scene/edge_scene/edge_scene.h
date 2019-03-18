@@ -11,11 +11,10 @@
 // y
 
 
-// just implement query func,
-// no matter it's projective or NN
+// just implement query func
 struct Scene_edge{
     size_t width = 640, height = 480;
-    float max_dist_diff = 4.0f; // m
+    float max_dist_diff = 4.0f; // pixels
     Vec2f* pcd_ptr;  // pointer can unify cpu & cuda version
     Vec2f* normal_ptr;  // layout: 1d, width*height length, array of Vec2f
 

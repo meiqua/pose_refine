@@ -2,10 +2,6 @@
 #include "cuda_icp/icp.h"
 #include <chrono>
 
-#include <Eigen/Core>
-#include <Eigen/Cholesky>
-#include <Eigen/Geometry>
-
 using namespace cv;
 using namespace std;
 
@@ -18,19 +14,19 @@ cv::Rect get_bbox(cv::Mat depth){
     return boundingRect(Points);
 }
 
-cv::Mat mat4x4f2cv(Mat4x4f& mat4){
-    cv::Mat mat_cv(4, 4, CV_32F);
-    mat_cv.at<float>(0, 0) = mat4[0][0];mat_cv.at<float>(0, 1) = mat4[0][1];
-    mat_cv.at<float>(0, 2) = mat4[0][2];mat_cv.at<float>(0, 3) = mat4[0][3];
+cv::Mat mat3x3f2cv(Mat3x3f& mat3){
+    cv::Mat mat_cv(3, 3, CV_32F);
+    mat_cv.at<float>(0, 0) = mat3[0][0];
+    mat_cv.at<float>(0, 1) = mat3[0][1];
+    mat_cv.at<float>(0, 2) = mat3[0][2];
 
-    mat_cv.at<float>(1, 0) = mat4[1][0];mat_cv.at<float>(1, 1) = mat4[1][1];
-    mat_cv.at<float>(1, 2) = mat4[1][2];mat_cv.at<float>(1, 3) = mat4[1][3];
+    mat_cv.at<float>(1, 0) = mat3[1][0];
+    mat_cv.at<float>(1, 1) = mat3[1][1];
+    mat_cv.at<float>(1, 2) = mat3[1][2];
 
-    mat_cv.at<float>(2, 0) = mat4[2][0];mat_cv.at<float>(2, 1) = mat4[2][1];
-    mat_cv.at<float>(2, 2) = mat4[2][2];mat_cv.at<float>(2, 3) = mat4[2][3];
-
-    mat_cv.at<float>(3, 0) = mat4[3][0];mat_cv.at<float>(3, 1) = mat4[3][1];
-    mat_cv.at<float>(3, 2) = mat4[3][2];mat_cv.at<float>(3, 3) = mat4[3][3];
+    mat_cv.at<float>(2, 0) = mat3[2][0];
+    mat_cv.at<float>(2, 1) = mat3[2][1];
+    mat_cv.at<float>(2, 2) = mat3[2][2];
 
     return mat_cv;
 }
