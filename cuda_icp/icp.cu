@@ -27,7 +27,7 @@ __global__ void transform_pcd_cuda(Vec2f* model_pcd_ptr, uint32_t model_pcd_size
 
 
 template<class Scene>
-RegistrationResult ICP_Point2Plane_cuda(device_vector_holder<Vec2f> &model_pcd, const Scene scene,
+RegistrationResult ICP2D_Point2Plane_cuda(device_vector_holder<Vec2f> &model_pcd, const Scene scene,
                                         const ICPConvergenceCriteria criteria){
     RegistrationResult result;
     RegistrationResult backup;
@@ -85,6 +85,8 @@ RegistrationResult ICP_Point2Plane_cuda(device_vector_holder<Vec2f> &model_pcd, 
     return result;
 }
 
+RegistrationResult ICP2D_Point2Plane_cuda(device_vector_holder<Vec2f> &model_pcd, const Scene_edge scene,
+                                        const ICPConvergenceCriteria criteria);
 }
 
 

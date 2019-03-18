@@ -45,7 +45,7 @@ void transform_pcd(std::vector<Vec2f>& model_pcd, Mat3x3f& trans){
 }
 
 template<class Scene>
-RegistrationResult ICP_Point2Plane_cpu(std::vector<Vec2f> &model_pcd, const Scene scene,
+RegistrationResult ICP2D_Point2Plane_cpu(std::vector<Vec2f> &model_pcd, const Scene scene,
                                        const ICPConvergenceCriteria criteria)
 {
     RegistrationResult result;
@@ -108,6 +108,9 @@ RegistrationResult ICP_Point2Plane_cpu(std::vector<Vec2f> &model_pcd, const Scen
     // never arrive here
     return result;
 }
+
+template RegistrationResult ICP2D_Point2Plane_cpu(std::vector<Vec2f> &model_pcd, const Scene_edge scene,
+const ICPConvergenceCriteria criteria);
 }
 
 

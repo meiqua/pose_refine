@@ -7,7 +7,7 @@
 #include <thrust/execution_policy.h>
 #endif
 
-#include "scene/common.h"
+#include "scene/edge_scene/edge_scene.h"
 
 namespace cuda_icp {
 

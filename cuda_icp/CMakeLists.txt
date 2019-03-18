@@ -20,8 +20,8 @@ include_directories(${EIGEN3_INCLUDE_DIR})
 
 
 # src
-SET(icp_cuda_srcs  icp.cu scene/common.cu)
-SET(icp_srcs  icp.cpp scene/common.cpp)
+SET(icp_cuda_srcs  icp.cu scene/common.cu scene/edge_scene/edge_scene.cu)
+SET(icp_srcs  icp.cpp scene/common.cpp scene/edge_scene/edge_scene.cpp)
 
 
 if(USE_CUDA)
