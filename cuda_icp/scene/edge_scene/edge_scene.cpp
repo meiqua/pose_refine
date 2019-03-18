@@ -1,7 +1,7 @@
 #include "edge_scene.h"
 
 void Scene_edge::init_Scene_edge_cpu(cv::Mat img, std::vector<Vec2f> &pcd_buffer,
-                                     std::vector<Vec2f> normal_buffer, float max_dist_diff)
+                                     std::vector<Vec2f>& normal_buffer, float max_dist_diff)
 {
     width = img.cols;
     height = img.rows;
@@ -15,7 +15,7 @@ void Scene_edge::init_Scene_edge_cpu(cv::Mat img, std::vector<Vec2f> &pcd_buffer
     }
 
     cv::Mat smoothed;
-    static const int KERNEL_SIZE = 7;
+    static const int KERNEL_SIZE = 5;
     cv::GaussianBlur(gray, smoothed, cv::Size(KERNEL_SIZE, KERNEL_SIZE), 0, 0, cv::BORDER_REPLICATE);
 
     cv::Mat edge;
