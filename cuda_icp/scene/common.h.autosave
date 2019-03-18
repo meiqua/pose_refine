@@ -44,3 +44,4 @@ T std__abs(T in){return (in > 0)? in: (-in);}
 template<typename T>
 __device__ __host__ inline
 T pow2(T in){return in * in;}
+

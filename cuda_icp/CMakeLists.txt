@@ -10,7 +10,7 @@ if(USE_CUDA)
 find_package(CUDA REQUIRED)
 set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} -std=c++11 -O3 --default-stream per-thread -Xcompiler -fopenmp")
 list(APPEND icp_inc ${CUDA_INCLUDE_DIRS})
-list(APPEND icp_lib ${CUDA_LIBRARIES} ${CUDA_CUBLAS_LIBRARIES})
+list(APPEND icp_lib ${CUDA_LIBRARIES})
 endif()
 
 
@@ -20,8 +20,8 @@ include_directories(${EIGEN3_INCLUDE_DIR})
 
 
 # src
-SET(icp_cuda_srcs  icp.cu scene/common.cu scene/depth_scene/depth_scene.cu scene/pcd_scene/pcd_scene.cu)
-SET(icp_srcs  icp.cpp scene/common.cpp scene/depth_scene/depth_scene.cpp scene/pcd_scene/pcd_scene.cpp)
+SET(icp_cuda_srcs  icp.cu scene/common.cu)
+SET(icp_srcs  icp.cpp scene/common.cpp)
 
 
 if(USE_CUDA)

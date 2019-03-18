@@ -34,7 +34,4 @@ device_vector_holder<T>::device_vector_holder(size_t size_){
     __malloc(size_);
 }
 
-template class device_vector_holder<Vec3f>;
-
-#include "pcd_scene/pcd_scene.h"
-template class device_vector_holder<Node_kdtree>;
+template class device_vector_holder<Vec2f>;
