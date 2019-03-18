@@ -5,6 +5,126 @@
 // for matrix multi
 #include "cublas_v2.h"
 
+// refer to icpcuda
+// just for test, results show that thrust is faster
+namespace custom_trans_reduce {
+
+#define warpSize 32
+
+#if __CUDA_ARCH__ < 300
+#define MAX_THREADS 512
+#else
+#define MAX_THREADS 1024
+#endif
+
+#if __CUDA_ARCH__ < 300
+__inline__ __device__
+float __shfl_down(float val, int offset, int width = 32)
+{
+    static __shared__ float shared[MAX_THREADS];
+    int lane = threadIdx.x % 32;
+    shared[threadIdx.x] = val;
+    __syncthreads();
+    val = (lane + offset < width) ? shared[threadIdx.x + offset] : 0;
+    __syncthreads();
+    return val;
+}
+#endif
+
+template<size_t D>
+__inline__  __device__ void warpReduceSum(vec<D,  float> & val)
+{
+    for(int offset = warpSize / 2; offset > 0; offset /= 2)
+    {
+        #pragma unroll
+        for(int i = 0; i < D; i++)
+        {
+            val[i] += __shfl_down(val[i], offset);
+        }
+    }
+}
+
+template<size_t D>
+__inline__  __device__ void blockReduceSum(vec<D,  float> & val)
+{
+    static __shared__ vec<D,  float> shared[32];
+
+    int lane = threadIdx.x % warpSize;
+
+    int wid = threadIdx.x / warpSize;
+
+    warpReduceSum(val);
+
+    //write reduced value to shared memory
+    if(lane == 0)
+    {
+        shared[wid] = val;
+    }
+    __syncthreads();
+
+    //ensure we only grab a value from shared memory if that warp existed
+    val = (threadIdx.x < blockDim.x / warpSize) ? shared[lane] : vec<D,  float>::Zero();
+
+    if(wid == 0)
+    {
+        warpReduceSum(val);
+    }
+}
+
+template<size_t D>
+__global__ void reduceSum(vec<D,  float> * in, vec<D,  float> * out, int N)
+{
+    vec<D,  float> sum = vec<D,  float>::Zero();
+
+    for(int i = blockIdx.x * blockDim.x + threadIdx.x; i < N; i += blockDim.x * gridDim.x)
+    {
+        sum += in[i];
+    }
+
+    blockReduceSum(sum);
+
+    if(threadIdx.x == 0)
+    {
+        out[blockIdx.x] = sum;
+    }
+}
+
+template <class originT, class transT, typename transOp>
+__global__ void transform_reduce_kernel(originT* pcd_ptr, size_t pcd_size,
+                                        transOp trans_op, transT* out){
+    int linear_tid = blockIdx.x * blockDim.x + threadIdx.x;
+    if(linear_tid > pcd_size) return;
+
+    transT sum = trans_op(pcd_ptr[linear_tid]);
+    blockReduceSum(sum);
+    if(threadIdx.x == 0)
+    {
+        out[blockIdx.x] = sum;
+    }
+}
+
+// not totally same as thrust
+// vec are splited to float to add, rather than add vec once
+template <class transT, class originT, typename transOp>
+transT transform_reduce(originT* pcd_ptr, size_t pcd_size, transOp trans_op, transT init){
+    const int threadsPerBlock = 512;
+    const int numBlocks = (pcd_size + threadsPerBlock - 1)/threadsPerBlock;
+
+    thrust::device_vector<transT> block_buffer(numBlocks);
+    transT* block_buffer_ptr = thrust::raw_pointer_cast(block_buffer.data());
+
+    thrust::device_vector<transT> result_dev(1);
+    transT* result_ptr = thrust::raw_pointer_cast(result_dev.data());
+    thrust::host_vector<transT> result_host(1);
+
+    transform_reduce_kernel<<<numBlocks, threadsPerBlock>>>(pcd_ptr, pcd_size, trans_op, block_buffer_ptr);
+    reduceSum<<<1, MAX_THREADS>>>(block_buffer_ptr, result_ptr, numBlocks);
+
+    result_host = result_dev;
+    return result_host[0] + init;
+}
+}
+
 namespace cuda_icp{
 #define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
 inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
@@ -48,6 +168,11 @@ RegistrationResult ICP_Point2Plane_cuda(device_vector_holder<Vec3f> &model_pcd, 
         Vec29f Ab_tight = thrust::transform_reduce(thrust::cuda::par.on(cudaStreamPerThread),
                                         model_pcd.begin_thr(), model_pcd.end_thr(), thrust__pcd2Ab<Scene>(scene),
                                         Vec29f::Zero(), thrust__plus());
+
+        // method from icpcuda
+//        Vec29f Ab_tight = custom_trans_reduce::transform_reduce(model_pcd.data(), model_pcd.size(),
+//                                                                thrust__pcd2Ab<Scene>(scene), Vec29f::Zero());
+
         cudaStreamSynchronize(cudaStreamPerThread);
         backup = result;
 

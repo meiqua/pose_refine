@@ -214,7 +214,7 @@ static cv::Mat eulerAnglesToRotationMatrix(cv::Vec3f theta)
 
 static std::string prefix = "/home/meiqua/pose_refine/test/";
 
-//#define USE_PROJ
+#define USE_PROJ
 
 #ifdef CUDA_ON
 void test_cuda_icp(){
