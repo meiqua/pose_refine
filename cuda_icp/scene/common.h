@@ -36,6 +36,11 @@ public:
     void __malloc(size_t size);
     void __free();
 };
+
+extern template class device_vector_holder<Vec3f>;
+
+struct Node_kdtree;
+extern template class device_vector_holder<Node_kdtree>;
 #endif
 
 // dep: mm

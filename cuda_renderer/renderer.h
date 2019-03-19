@@ -172,6 +172,8 @@ public:
     void __malloc(size_t size);
     void __free();
 };
+
+extern template class device_vector_holder<int>;
 #endif
 
 std::vector<Model::mat4x4> mat_to_compact_4x4(const std::vector<cv::Mat>& poses);

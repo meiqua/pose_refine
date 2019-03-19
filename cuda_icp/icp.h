@@ -52,10 +52,22 @@ Mat4x4f eigen_slover_666(float* A, float* b);
 template <class T>
 std::vector<Vec3f> depth2cloud_cpu(T* depth, uint32_t width, uint32_t height, Mat3x3f& K, uint32_t stride = 1,
                                uint32_t tl_x = 0, uint32_t tl_y = 0);
+
+extern template std::vector<Vec3f> depth2cloud_cpu(int32_t* depth, uint32_t width, uint32_t height, Mat3x3f& K,
+                                uint32_t stride, uint32_t tl_x, uint32_t tl_y);
+extern template std::vector<Vec3f> depth2cloud_cpu(uint16_t* depth, uint32_t width, uint32_t height, Mat3x3f& K,
+                                            uint32_t stride, uint32_t tl_x, uint32_t tl_y);
+
+
 template <class Scene>
 RegistrationResult ICP_Point2Plane_cpu(std::vector<Vec3f>& model_pcd,
         const Scene scene,
         const ICPConvergenceCriteria criteria = ICPConvergenceCriteria());
+
+extern template RegistrationResult ICP_Point2Plane_cpu(std::vector<Vec3f> &model_pcd, const Scene_projective scene,
+const ICPConvergenceCriteria criteria);
+extern template RegistrationResult ICP_Point2Plane_cpu(std::vector<Vec3f> &model_pcd, const Scene_nn scene,
+const ICPConvergenceCriteria criteria);
 
 #ifdef CUDA_ON
 // depth can be int32, if we use our cuda renderer
@@ -63,9 +75,21 @@ RegistrationResult ICP_Point2Plane_cpu(std::vector<Vec3f>& model_pcd,
 template <class T>
 device_vector_holder<Vec3f> depth2cloud_cuda(T* depth, uint32_t width, uint32_t height, Mat3x3f& K, uint32_t stride = 1,
                      uint32_t tl_x = 0, uint32_t tl_y = 0);
+
+extern template device_vector_holder<Vec3f> depth2cloud_cuda(uint16_t *depth, uint32_t width, uint32_t height, Mat3x3f& K,
+                                 uint32_t stride, uint32_t tl_x, uint32_t tl_y);
+extern template device_vector_holder<Vec3f> depth2cloud_cuda(int32_t *depth, uint32_t width, uint32_t height, Mat3x3f& K,
+                                 uint32_t stride, uint32_t tl_x, uint32_t tl_y);
+
+
 template<class Scene>
 RegistrationResult ICP_Point2Plane_cuda(device_vector_holder<Vec3f> &model_pcd, const Scene scene,
                                         const ICPConvergenceCriteria criteria = ICPConvergenceCriteria());
+
+extern template RegistrationResult ICP_Point2Plane_cuda(device_vector_holder<Vec3f>&,
+const Scene_projective, const ICPConvergenceCriteria);
+extern template RegistrationResult ICP_Point2Plane_cuda(device_vector_holder<Vec3f>&,
+const Scene_nn, const ICPConvergenceCriteria);
 #endif
 
 
@@ -167,12 +191,22 @@ template <class Scene>
 RegistrationResult ICP_Point2Plane_cuda_global_memory_version(device_vector_holder<Vec3f>& model_pcd,
         const Scene scene,
         const ICPConvergenceCriteria criteria = ICPConvergenceCriteria());
+
+extern template RegistrationResult ICP_Point2Plane_cuda_global_memory_version(device_vector_holder<Vec3f>&,
+const Scene_projective, const ICPConvergenceCriteria);
+extern template RegistrationResult ICP_Point2Plane_cuda_global_memory_version(device_vector_holder<Vec3f>&,
+const Scene_nn, const ICPConvergenceCriteria);
 #endif
 
 template <class Scene>
 RegistrationResult ICP_Point2Plane_cpu_global_memory_version(std::vector<Vec3f>& model_pcd,
         const Scene scene,
         const ICPConvergenceCriteria criteria = ICPConvergenceCriteria());
+
+extern template RegistrationResult ICP_Point2Plane_cpu_global_memory_version(std::vector<Vec3f> &model_pcd, const Scene_projective scene,
+const ICPConvergenceCriteria criteria);
+extern template RegistrationResult ICP_Point2Plane_cpu_global_memory_version(std::vector<Vec3f> &model_pcd, const Scene_nn scene,
+const ICPConvergenceCriteria criteria);
 }
 
 
