@@ -5,7 +5,7 @@
 // for matrix multi
 #include "cublas_v2.h"
 
-// refer to icpcuda
+// refer to icpcuda, !!!!!! not used here
 // just for test, results show that thrust is faster
 namespace custom_trans_reduce {
 
@@ -89,7 +89,7 @@ __global__ void reduceSum(vec<D,  float> * in, vec<D,  float> * out, int N)
     }
 }
 
-template <class originT, class transT, typename transOp>
+template <class transT, class originT, typename transOp>
 __global__ void transform_reduce_kernel(originT* pcd_ptr, size_t pcd_size,
                                         transOp trans_op, transT* out){
     int linear_tid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -126,6 +126,8 @@ transT transform_reduce(originT* pcd_ptr, size_t pcd_size, transOp trans_op, tra
 }
 
 namespace cuda_icp{
+
+// for debug info
 #define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
 inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
 {
@@ -158,7 +160,7 @@ RegistrationResult ICP_Point2Plane_cuda(device_vector_holder<Vec3f> &model_pcd, 
     RegistrationResult backup;
 
     thrust::host_vector<float> A_host(36, 0);
-    thrust::host_vector<float> b_host(36, 0);
+    thrust::host_vector<float> b_host(6, 0);
 
     const uint32_t threadsPerBlock = 256;
     const uint32_t numBlocks = (model_pcd.size() + threadsPerBlock - 1)/threadsPerBlock;
@@ -362,7 +364,7 @@ RegistrationResult ICP_Point2Plane_cuda_global_memory_version(device_vector_hold
     thrust::device_vector<float> b_dev(6);
 
     thrust::host_vector<float> A_host(36, 0);
-    thrust::host_vector<float> b_host(36, 0);
+    thrust::host_vector<float> b_host(6, 0);
     // --------------------------------------, buffer on gpu OK
 
     RegistrationResult result;
