@@ -35,16 +35,16 @@ public:
     void LoadModel(const std::string & fileName);
 
     struct int3 {
-        size_t v0;
-        size_t v1;
-        size_t v2;
+        int v0;
+        int v1;
+        int v2;
     };
 
     struct ROI{
-        size_t x;
-        size_t y;
-        size_t width;
-        size_t height;
+        int x;
+        int y;
+        int width;
+        int height;
     };
 
     struct float3{

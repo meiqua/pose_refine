@@ -1,4 +1,5 @@
 #include "pose_refine.h"
+#include <omp.h>
 
 static void accumBilateral(long delta, long i, long j, long *A, long *b, int threshold)
 {
@@ -45,11 +46,17 @@ PoseRefine::PoseRefine(cv::Mat depth, cv::Mat K, std::string model_path): model(
     height = depth.rows;
 
     proj_mat = cuda_renderer::compute_proj(K, width, height);
+
+#ifdef CUDA_ON
     scene.init_Scene_projective_cuda(scene_depth, reinterpret_cast<Mat3x3f&>(K),
                                      pcd_buffer_cuda, normal_buffer_cuda);
+#else
+    scene.init_Scene_projective_cpu(scene_depth, reinterpret_cast<Mat3x3f&>(K), pcd_buffer, normal_buffer);
+#endif
 }
 
-std::vector<cuda_icp::RegistrationResult> PoseRefine::process_batch__(std::vector<cv::Mat>& init_poses, int down_sample,
+std::vector<cuda_icp::RegistrationResult> PoseRefine::process_batch__(std::vector<cv::Mat>& init_poses,
+                                                                      int down_sample,
                                                                       cuda_icp::ICPConvergenceCriteria criteria)
 {
     std::vector<cuda_icp::RegistrationResult> result_poses(init_poses.size());
@@ -63,22 +70,37 @@ std::vector<cuda_icp::RegistrationResult> PoseRefine::process_batch__(std::vecto
     K_icp[0][2] /= down_sample; K_icp[1][2] /= down_sample;
 
     std::vector<cuda_renderer::Model::mat4x4> mat4_v(batch_size);
-    int i=0;
-    for(; i<=init_poses.size()-batch_size; i+=batch_size){
-        for(int j=0; j<batch_size; j++) mat4_v[j].init_from_cv(init_poses[j+i]);
 
+    auto icp_batch = [&](int i){
         // directly down sample by viewport
+#ifdef CUDA_ON
         auto depths = cuda_renderer::render_cuda_keep_in_gpu(model.tris, mat4_v,
                                                            width_local, height_local, proj_mat);
-
+#else
+        auto depths = cuda_renderer::render_cpu(model.tris, mat4_v,
+                                                           width_local, height_local, proj_mat);
+#endif
         // cuda per thread stream
-# pragma omp parallel for num_threads(batch_size)
-        for(int j=0; j<batch_size; j++)
+# pragma omp parallel num_threads(mat4_v.size())
         {
+            int j = omp_get_thread_num();
+
+#ifdef CUDA_ON
             auto pcd1_cuda = cuda_icp::depth2cloud_cuda(depths.data() + j*width_local*height_local,
                                                         width_local, height_local, K_icp);
             result_poses[j+i] = cuda_icp::ICP_Point2Plane_cuda(pcd1_cuda, scene, criteria);
+#else
+            auto pcd1_cpu = cuda_icp::depth2cloud_cpu(depths.data() + j*width_local*height_local,
+                                                        width_local, height_local, K_icp);
+            result_poses[j+i] = cuda_icp::ICP_Point2Plane_cpu(pcd1_cpu, scene, criteria);
+#endif
         }
+    };
+
+    int i=0;
+    for(; i<=init_poses.size()-batch_size; i+=batch_size){
+        for(int j=0; j<batch_size; j++) mat4_v[j].init_from_cv(init_poses[j+i]);
+        icp_batch(i);
     }
 
     int left = init_poses.size() - i;
@@ -86,17 +108,7 @@ std::vector<cuda_icp::RegistrationResult> PoseRefine::process_batch__(std::vecto
     if(left > 0){
         mat4_v.resize(left);
         for(int j=0; j<left; j++) mat4_v[j].init_from_cv(init_poses[j+i]);
-
-        // directly down sample by viewport
-        auto depths = cuda_renderer::render_cuda_keep_in_gpu(model.tris, mat4_v,
-                                                           width_local, height_local, proj_mat);
-# pragma omp parallel for num_threads(left)
-        for(int j=0; j<left; j++)
-        {
-            auto pcd1_cuda = cuda_icp::depth2cloud_cuda(depths.data() + j*width_local*height_local,
-                                                        width_local, height_local, K_icp);
-            result_poses[j+i] = cuda_icp::ICP_Point2Plane_cuda(pcd1_cuda, scene, criteria);
-        }
+        icp_batch(i);
     }
 
     return result_poses;
@@ -106,7 +118,6 @@ std::vector<cuda_icp::RegistrationResult> PoseRefine::process_batch(std::vector<
                                                                     int down_sample,
                                                                     bool depth_aligned)
 {
-
     if(depth_aligned) return process_batch__(init_poses, down_sample);
     else{
         std::vector<cuda_icp::RegistrationResult> result_poses1;
