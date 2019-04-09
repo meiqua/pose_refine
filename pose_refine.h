@@ -38,10 +38,4 @@ public:
 
     static cv::Mat get_normal(cv::Mat& depth, cv::Mat K = cv::Mat());
     static cv::Mat get_depth_edge(cv::Mat& depth, cv::Mat K = cv::Mat());
-
-private:
-    std::vector<cuda_icp::RegistrationResult> process_batch__(std::vector<cv::Mat>& init_poses,
-                                                              int down_sample = 2,
-                                                              cuda_icp::ICPConvergenceCriteria criteria =
-                                                                        cuda_icp::ICPConvergenceCriteria());
 };
