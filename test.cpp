@@ -2,6 +2,9 @@
 #include "cuda_icp/icp.h"
 #include <chrono>
 
+#include <experimental/filesystem>
+namespace fs = std::experimental::filesystem;
+
 #include "Open3D/Core/Registration/Registration.h"
 #include "Open3D/Core/Geometry/Image.h"
 #include "Open3D/Core/Camera/PinholeCameraIntrinsic.h"
@@ -403,11 +406,36 @@ timer.out("ICP_Point2Plane_cuda");
 }
 #endif
 
+// hinterstoisser doumanoglou tejani
+string dataset_prefix = "/home/meiqua/patch_linemod/public/datasets/hinterstoisser/test/03/";
+
 int main(int argc, char const *argv[]){
 
 #ifdef CUDA_ON
-    test_cuda_icp();
+//    test_cuda_icp();
 #endif
+
+    vector<string> rgb_paths, depth_paths;
+    for (const auto & p : fs::directory_iterator(dataset_prefix + "rgb/"))
+        rgb_paths.push_back(p.path());
+    for (const auto & p : fs::directory_iterator(dataset_prefix + "depth/"))
+        depth_paths.push_back(p.path());
+
+    std::sort(rgb_paths.begin(), rgb_paths.end());
+    std::sort(depth_paths.begin(), depth_paths.end());
+
+    // from hinter dataset
+    Mat modelK = (cv::Mat_<float>(3,3) << 572.4114, 0.0, 325.2611, 0.0, 573.57043, 242.04899, 0.0, 0.0, 1.0);
+
+    for(size_t i=0; i<rgb_paths.size(); i++){
+        Mat rgb = imread(rgb_paths[i], CV_LOAD_IMAGE_ANYCOLOR);
+        Mat depth = cv::imread(depth_paths[i], CV_LOAD_IMAGE_ANYCOLOR | CV_LOAD_IMAGE_ANYDEPTH);
+
+        Mat depth_edge = PoseRefine::get_depth_edge(depth);
+        imshow("depth", helper::view_dep(depth));
+        imshow("depth edge", depth_edge);
+        waitKey(0);
+    }
 
     return 0;
 }
