@@ -55,11 +55,12 @@ PoseRefine::PoseRefine(cv::Mat depth, cv::Mat K, std::string model_path): model(
 #endif
 }
 
-std::vector<cuda_icp::RegistrationResult> PoseRefine::process_batch__(std::vector<cv::Mat>& init_poses,
-                                                                      int down_sample,
-                                                                      cuda_icp::ICPConvergenceCriteria criteria)
+std::vector<cuda_icp::RegistrationResult> PoseRefine::process_batch(std::vector<cv::Mat>& init_poses,
+                                                                    int down_sample,
+                                                                    bool depth_aligned)
 {
     std::vector<cuda_icp::RegistrationResult> result_poses(init_poses.size());
+    cuda_icp::ICPConvergenceCriteria criteria;
 
     assert(width%down_sample == 0 && height%down_sample == 0);
     const int width_local = width/down_sample;
@@ -70,6 +71,16 @@ std::vector<cuda_icp::RegistrationResult> PoseRefine::process_batch__(std::vecto
     K_icp[0][2] /= down_sample; K_icp[1][2] /= down_sample;
 
     std::vector<cuda_renderer::Model::mat4x4> mat4_v(batch_size);
+
+    float temp_max_diff = scene.max_dist_diff;
+    auto setting_for_align = [&](){
+        criteria = {1e-5f, 1e-5f, 1};   // just 1 iteration
+        scene.max_dist_diff = FLT_MAX;  // invalidate rejection
+    };
+    auto setting_backup = [&](){
+        criteria = {1e-5f, 1e-5f, 30};
+        scene.max_dist_diff = temp_max_diff;
+    };
 
     auto icp_batch = [&](int i){
         // directly down sample by viewport
@@ -84,16 +95,43 @@ std::vector<cuda_icp::RegistrationResult> PoseRefine::process_batch__(std::vecto
 # pragma omp parallel num_threads(mat4_v.size())
         {
             int j = omp_get_thread_num();
-
+            result_poses[j+i].transformation_ = reinterpret_cast<Mat4x4f&>(mat4_v[j]);
 #ifdef CUDA_ON
             auto pcd1_cuda = cuda_icp::depth2cloud_cuda(depths.data() + j*width_local*height_local,
                                                         width_local, height_local, K_icp);
-            result_poses[j+i] = cuda_icp::ICP_Point2Plane_cuda(pcd1_cuda, scene, criteria);
 #else
             auto pcd1_cpu = cuda_icp::depth2cloud_cpu(depths.data() + j*width_local*height_local,
                                                         width_local, height_local, K_icp);
-            result_poses[j+i] = cuda_icp::ICP_Point2Plane_cpu(pcd1_cpu, scene, criteria);
 #endif
+            if(!depth_aligned){
+                setting_for_align();
+                auto previous_T = result_poses[j+i].transformation_;
+#ifdef CUDA_ON
+                result_poses[j+i] = cuda_icp::ICP_Point2Plane_cuda(pcd1_cuda, scene, criteria);
+#else
+                result_poses[j+i] = cuda_icp::ICP_Point2Plane_cpu(pcd1_cpu, scene, criteria);
+#endif
+                result_poses[j+i].transformation_ = result_poses[j+i].transformation_ * previous_T;
+
+
+                setting_backup();
+                previous_T = result_poses[j+i].transformation_;
+#ifdef CUDA_ON
+                result_poses[j+i] = cuda_icp::ICP_Point2Plane_cuda(pcd1_cuda, scene, criteria);
+#else
+                result_poses[j+i] = cuda_icp::ICP_Point2Plane_cpu(pcd1_cpu, scene, criteria);
+#endif
+
+                result_poses[j+i].transformation_ = result_poses[j+i].transformation_ * previous_T;
+            }else{
+                auto previous_T = result_poses[j+i].transformation_;
+#ifdef CUDA_ON
+                result_poses[j+i] = cuda_icp::ICP_Point2Plane_cuda(pcd1_cuda, scene, criteria);
+#else
+                result_poses[j+i] = cuda_icp::ICP_Point2Plane_cpu(pcd1_cpu, scene, criteria);
+#endif
+                result_poses[j+i].transformation_ = result_poses[j+i].transformation_ * previous_T;
+            }
         }
     };
 
@@ -112,32 +150,6 @@ std::vector<cuda_icp::RegistrationResult> PoseRefine::process_batch__(std::vecto
     }
 
     return result_poses;
-}
-
-std::vector<cuda_icp::RegistrationResult> PoseRefine::process_batch(std::vector<cv::Mat>& init_poses,
-                                                                    int down_sample,
-                                                                    bool depth_aligned)
-{
-    if(depth_aligned) return process_batch__(init_poses, down_sample);
-    else{
-        std::vector<cuda_icp::RegistrationResult> result_poses1;
-        std::vector<cuda_icp::RegistrationResult> result_poses;
-
-        // use 1 iteration to align depth
-        float temp = scene.max_dist_diff;
-        scene.max_dist_diff = FLT_MAX;  // invalid rejection criteria
-        result_poses1 = process_batch__(init_poses, down_sample, {1e-5f, 1e-5f, 1});
-
-        scene.max_dist_diff = temp;  // normal icp
-        result_poses = process_batch__(init_poses, down_sample);
-
-        for(int i=0; i<result_poses.size(); i++){
-            auto& T1 = result_poses1[i].transformation_;
-            result_poses[i].transformation_ = result_poses[i].transformation_ * T1;
-        }
-
-        return result_poses;
-    }
 }
 
 cv::Mat PoseRefine::get_normal(cv::Mat &depth__, cv::Mat K)
