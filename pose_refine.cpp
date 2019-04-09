@@ -103,28 +103,10 @@ std::vector<cuda_icp::RegistrationResult> PoseRefine::process_batch(std::vector<
             auto pcd1_cpu = cuda_icp::depth2cloud_cpu(depths.data() + j*width_local*height_local,
                                                         width_local, height_local, K_icp);
 #endif
+            Mat4x4f previous_T;
             if(!depth_aligned){
                 setting_for_align();
-                auto previous_T = result_poses[j+i].transformation_;
-#ifdef CUDA_ON
-                result_poses[j+i] = cuda_icp::ICP_Point2Plane_cuda(pcd1_cuda, scene, criteria);
-#else
-                result_poses[j+i] = cuda_icp::ICP_Point2Plane_cpu(pcd1_cpu, scene, criteria);
-#endif
-                result_poses[j+i].transformation_ = result_poses[j+i].transformation_ * previous_T;
-
-
-                setting_backup();
                 previous_T = result_poses[j+i].transformation_;
-#ifdef CUDA_ON
-                result_poses[j+i] = cuda_icp::ICP_Point2Plane_cuda(pcd1_cuda, scene, criteria);
-#else
-                result_poses[j+i] = cuda_icp::ICP_Point2Plane_cpu(pcd1_cpu, scene, criteria);
-#endif
-
-                result_poses[j+i].transformation_ = result_poses[j+i].transformation_ * previous_T;
-            }else{
-                auto previous_T = result_poses[j+i].transformation_;
 #ifdef CUDA_ON
                 result_poses[j+i] = cuda_icp::ICP_Point2Plane_cuda(pcd1_cuda, scene, criteria);
 #else
@@ -132,6 +114,15 @@ std::vector<cuda_icp::RegistrationResult> PoseRefine::process_batch(std::vector<
 #endif
                 result_poses[j+i].transformation_ = result_poses[j+i].transformation_ * previous_T;
             }
+
+            setting_backup();
+            previous_T = result_poses[j+i].transformation_;
+#ifdef CUDA_ON
+            result_poses[j+i] = cuda_icp::ICP_Point2Plane_cuda(pcd1_cuda, scene, criteria);
+#else
+            result_poses[j+i] = cuda_icp::ICP_Point2Plane_cpu(pcd1_cpu, scene, criteria);
+#endif
+            result_poses[j+i].transformation_ = result_poses[j+i].transformation_ * previous_T;
         }
     };
 
