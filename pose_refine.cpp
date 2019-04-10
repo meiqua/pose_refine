@@ -143,6 +143,59 @@ std::vector<cuda_icp::RegistrationResult> PoseRefine::process_batch(std::vector<
     return result_poses;
 }
 
+cv::Mat so3_map(cv::Mat rot_vec){
+    assert(rot_vec.rows == 3 && rot_vec.cols == 1 && rot_vec.type() == CV_32F);
+
+    double theta = cv::norm(rot_vec);
+    assert(theta > 1e-6 && "rot vec too small");
+    rot_vec /= theta;
+
+    cv::Mat rot_up = cv::Mat(3, 3, CV_32F, cv::Scalar(0));
+    rot_up.at<float>(0, 1) = -rot_vec.at<float>(2, 0); rot_up.at<float>(1, 0) = rot_vec.at<float>(2, 0);
+    rot_up.at<float>(0, 2) = rot_vec.at<float>(1, 0); rot_up.at<float>(2, 0) = -rot_vec.at<float>(1, 0);
+    rot_up.at<float>(1, 2) = -rot_vec.at<float>(0, 0); rot_up.at<float>(2, 1) = rot_vec.at<float>(0, 0);
+
+    cv::Mat R = std::cos(theta)*cv::Mat::eye(3, 3, CV_32F) +
+            (1-std::cos(theta))*rot_vec*rot_vec.t() + std::sin(theta) * rot_up;
+    return R;
+}
+
+std::vector<cv::Mat> PoseRefine::poses_extend(std::vector<cv::Mat> &init_poses, float degree_var)
+{
+    assert(init_poses.size() > 0);
+    assert(init_poses[0].type() == CV_32F && init_poses[0].rows == 4 && init_poses[0].cols == 4);
+
+    std::vector<cv::Mat> extended(init_poses.size() * 27, cv::Mat(4, 4, CV_32F));
+    for(size_t pose_iter=0; pose_iter<init_poses.size(); pose_iter++){
+        auto& pose = init_poses[pose_iter];
+
+        size_t shift = 0;
+        for(int i=-1; i<=1; i++){
+            for(int j=-1; j<=1; j++){
+                for(int k=-1; k<=1; k++){
+                    auto& extended_cur = extended[pose_iter*27 + shift];
+
+                    float vec_data[3] = {
+                        i * degree_var,
+                        j * degree_var,
+                        k * degree_var
+                    };
+                    cv::Mat rot_vec(3, 1, CV_32F, vec_data);
+                    cv::Mat delta_R = so3_map(rot_vec);
+
+//                    extended_cur = pose.clone(); // clone allocate new heap
+                    pose.copyTo(extended_cur);
+                    cv::Mat R = pose(cv::Rect(0, 0, 3, 3));
+                    extended_cur(cv::Rect(0, 0, 3, 3)) = delta_R * R;
+
+                    shift ++;
+                }
+            }
+        }
+    }
+    return extended;
+}
+
 cv::Mat PoseRefine::get_normal(cv::Mat &depth__, cv::Mat K)
 {
     cv::Mat depth;
