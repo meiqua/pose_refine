@@ -33,9 +33,9 @@ public:
 #endif
     PoseRefine(cv::Mat depth, cv::Mat K, std::string model_path);
 
-    // Only search rotation neibor, default is 10 degree.
+    // Only search rotation neibor, default is 18 degree.
     // Because linemod can make sure tanslation error is in 4 pixels.
-    std::vector<cv::Mat> poses_extend(std::vector<cv::Mat>& init_poses, float degree_var = CV_PI/18);
+    std::vector<cv::Mat> poses_extend(std::vector<cv::Mat>& init_poses, float degree_var = CV_PI/10);
 
     std::vector<cuda_icp::RegistrationResult> process_batch(std::vector<cv::Mat>& init_poses,
                                                             int down_sample = 2, bool depth_aligned = false);

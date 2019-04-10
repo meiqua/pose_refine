@@ -1,6 +1,8 @@
 #include "pose_refine.h"
 #include <omp.h>
 
+// ---------------------helper begin--------------------------------
+
 static void accumBilateral(long delta, long i, long j, long *A, long *b, int threshold)
 {
     long f = std::abs(delta) < threshold ? 1 : 0;
@@ -34,6 +36,44 @@ static void cannyTraceEdge(int rowOffset, int colOffset, int row, int col, cv::M
         cannyTraceEdge ( 1, -1, newRow, newCol, canny_edge, mag_nms);
     }
 };
+
+template <typename T> static
+std::vector<size_t> argsort(const std::vector<T> &v) {
+
+  // initialize original index locations
+  std::vector<size_t> idx(v.size());
+  std::iota(idx.begin(), idx.end(), 0);
+
+  // sort indexes based on comparing values in v
+  std::sort(idx.begin(), idx.end(),
+       [&v](size_t i1, size_t i2) {return v[i1] > v[i2];});
+
+  return idx;
+}
+
+// copied from opencv 3.4, not exist in 3.0
+template<typename _Tp> static inline
+double jaccardDistance__(const cv::Rect_<_Tp>& a, const cv::Rect_<_Tp>& b) {
+    _Tp Aa = a.area();
+    _Tp Ab = b.area();
+
+    if ((Aa + Ab) <= std::numeric_limits<_Tp>::epsilon()) {
+        // jaccard_index = 1 -> distance = 0
+        return 0.0;
+    }
+
+    double Aab = (a & b).area();
+    // distance = 1 - jaccard_index
+    return 1.0 - Aab / (Aa + Ab - Aab);
+}
+
+template <typename T>
+static inline float computeOverlap(const T& a, const T& b)
+{
+    return 1.f - static_cast<float>(jaccardDistance__(a, b));
+}
+
+// ---------------------helper end--------------------------------
 
 PoseRefine::PoseRefine(cv::Mat depth, cv::Mat K, std::string model_path): model(model_path)
 {
@@ -154,6 +194,7 @@ std::vector<cuda_icp::RegistrationResult> PoseRefine::process_batch(std::vector<
 std::vector<cuda_icp::RegistrationResult> PoseRefine::results_filter(std::vector<cuda_icp::RegistrationResult> &results,
                                                                      float edge_hit_rate_thresh, float fitness_thresh, float rmse_thresh)
 {
+    // first pass, check rmse & fitness
     std::vector<cuda_icp::RegistrationResult> filtered;
 
     for(auto& res: results){
@@ -166,6 +207,18 @@ std::vector<cuda_icp::RegistrationResult> PoseRefine::results_filter(std::vector
     for(int i=0; i<filtered.size(); i++){
         mat4_v[i] = reinterpret_cast<cuda_renderer::Model::mat4x4&>(filtered[i].transformation_);
     }
+
+    // second pass, check edge hit
+    struct Result_bbox{
+        cuda_icp::RegistrationResult result;
+        cv::Rect bbox;
+        float score;
+        bool operator > (const Result_bbox& other) const {
+            return this->score > other.score;
+        }
+    };
+
+    std::vector<Result_bbox> filtered2;
 
     int down_sample = 2;
     assert(width%down_sample == 0 && height%down_sample == 0);
@@ -181,9 +234,7 @@ std::vector<cuda_icp::RegistrationResult> PoseRefine::results_filter(std::vector
     auto depths = cuda_renderer::render_cpu(model.tris, mat4_v, width_local, height_local, proj_mat);
 #endif
 
-    std::vector<cuda_icp::RegistrationResult> filtered2;
-
-#pragma omp declare reduction (merge : std::vector<cuda_icp::RegistrationResult> : \
+#pragma omp declare reduction (merge : std::vector<Result_bbox> : \
     omp_out.insert(omp_out.end(), omp_in.begin(), omp_in.end()))
 
 #pragma omp parallel for reduction(merge: filtered2)
@@ -198,9 +249,56 @@ std::vector<cuda_icp::RegistrationResult> PoseRefine::results_filter(std::vector
         cv::Mat hit_edge;
         cv::bitwise_and(mask_edge, depth_edge_local, hit_edge);
         float hit_rate = float(cv::countNonZero(hit_edge))/cv::countNonZero(mask_edge);
-        if(hit_rate > edge_hit_rate_thresh) filtered2.push_back(filtered[i]);
+        if(hit_rate > edge_hit_rate_thresh){
+
+            Result_bbox temp;
+            temp.result = filtered[i];
+
+            cv::Mat Points;
+            cv::findNonZero(mask, Points);
+            temp.bbox = boundingRect(Points);
+
+            temp.score = 1/(filtered[i].inlier_rmse_ + 0.01f);
+
+            filtered2.push_back(temp);
+        }
     }
-    return filtered2;
+
+    // third pass, nms
+    std::vector<cuda_icp::RegistrationResult> filtered3;
+    if(filtered2.empty()) return filtered3;
+    if(filtered2.size() == 1){
+        filtered3.push_back(filtered2[0].result);
+        return filtered3;
+    }
+
+    // nms
+    float nms_thrsh = 0.5f;
+    auto sorted_idx = argsort(filtered2);
+    std::vector<size_t> out_idx;
+
+    // for all bbox
+    for(size_t i=0; i<sorted_idx.size(); i++){
+        size_t idx = sorted_idx[i];
+        bool keep = true;
+
+        // not overlap with existed bbox
+        for(size_t j=0; j<out_idx.size() && keep; j++){
+            size_t kept_idx = out_idx[j];
+            float overlap = computeOverlap(filtered2[idx].bbox, filtered2[kept_idx].bbox);
+            keep = overlap <= nms_thrsh;
+        }
+        if(keep){
+            out_idx.push_back(idx);
+        }
+    }
+
+    filtered3.resize(out_idx.size());
+    for(size_t i=0; i<out_idx.size(); i++){
+        filtered3[i] = filtered2[out_idx[i]].result;
+    }
+
+    return filtered3;
 }
 
 cv::Mat so3_map(cv::Mat rot_vec){
