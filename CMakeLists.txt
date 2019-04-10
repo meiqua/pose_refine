@@ -7,7 +7,7 @@ option(USE_CUDA "use cuda or not" ON)
 #SET(CMAKE_BUILD_TYPE "Release")
 SET(CMAKE_BUILD_TYPE "Debug")
 
-SET(CMAKE_CXX_FLAGS "-fopenmp -Wall -Wno-sign-compare $ENV{CXXFLAGS}")
+SET(CMAKE_CXX_FLAGS "-fPIC -fopenmp -Wall -Wno-sign-compare $ENV{CXXFLAGS}")
 SET(CMAKE_CXX_FLAGS_DEBUG "-O0 -g2 -ggdb")
 SET(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
@@ -43,6 +43,19 @@ endif ()
 list(APPEND pose_refine_lib ${Open3D_LIBRARIES})
 
 
+# pybind11
+find_package(PythonLibs 3 REQUIRED)
+find_package(pybind11 REQUIRED)
+include(Cmake/FindNumPy.cmake)
+
+include_directories(${INCLUDE_DIRECTORIES}
+    ${PYTHON_INCLUDE_DIRS} ${PYTHON_NUMPY_INCLUDE_DIR})
+
+set(SOURCE_PYBIND
+    pybind11.cpp
+    np2mat/ndarray_converter.cpp)
+
+
 # src
 SET(pose_refine_srcs pose_refine.cpp)
 
@@ -51,6 +64,10 @@ SET(pose_refine_srcs pose_refine.cpp)
 add_library(pose_refine ${pose_refine_srcs})
 target_include_directories(pose_refine PUBLIC ${pose_refine_inc})
 target_link_libraries(pose_refine PUBLIC ${pose_refine_lib})
+
+
+pybind11_add_module(${PROJECT_NAME}_pybind ${SOURCE_PYBIND})
+target_link_libraries(${PROJECT_NAME}_pybind PRIVATE pose_refine)
 
 add_executable(pose_refine_test test.cpp)
 target_link_libraries(pose_refine_test pose_refine stdc++fs)

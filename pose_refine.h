@@ -25,7 +25,7 @@ public:
 #endif
     Scene_projective scene;
 
-    // render & icp batch size
+    // render & icp batch size, 8 is better on CPU
 #ifdef CUDA_ON
     int batch_size = 100;
 #else
@@ -33,8 +33,17 @@ public:
 #endif
     PoseRefine(cv::Mat depth, cv::Mat K, std::string model_path);
 
+    // Only search rotation neibor, default is 10 degree.
+    // Because linemod can make sure tanslation error is in 4 pixels.
+    std::vector<cv::Mat> poses_extend(std::vector<cv::Mat>& init_poses, float degree_var = CV_PI/18);
+
     std::vector<cuda_icp::RegistrationResult> process_batch(std::vector<cv::Mat>& init_poses,
                                                             int down_sample = 2, bool depth_aligned = false);
+
+    std::vector<cuda_icp::RegistrationResult> results_filter(std::vector<cuda_icp::RegistrationResult>& results,
+                                                            float edge_hit_rate_thresh = 0.7f,
+                                                            float fitness_thresh = 0.7f,
+                                                            float rmse_thresh = 0.07f);
 
     static cv::Mat get_normal(cv::Mat& depth, cv::Mat K = cv::Mat());
     static cv::Mat get_depth_edge(cv::Mat& depth, cv::Mat K = cv::Mat());

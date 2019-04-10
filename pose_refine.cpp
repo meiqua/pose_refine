@@ -82,6 +82,14 @@ std::vector<cuda_icp::RegistrationResult> PoseRefine::process_batch(std::vector<
         scene.max_dist_diff = temp_max_diff;
     };
 
+    // icp is m, while init poses & renderer is mm
+    auto to_mm = [](Mat4x4f& trans){
+        trans[0][3] /= 1000.0f;
+        trans[1][3] /= 1000.0f;
+        trans[2][3] /= 1000.0f;
+        return trans;
+    };
+
     auto icp_batch = [&](int i){
         // directly down sample by viewport
 #ifdef CUDA_ON
@@ -112,7 +120,7 @@ std::vector<cuda_icp::RegistrationResult> PoseRefine::process_batch(std::vector<
 #else
                 result_poses[j+i] = cuda_icp::ICP_Point2Plane_cpu(pcd1_cpu, scene, criteria);
 #endif
-                result_poses[j+i].transformation_ = result_poses[j+i].transformation_ * previous_T;
+                result_poses[j+i].transformation_ = to_mm(result_poses[j+i].transformation_) * previous_T;
             }
 
             setting_backup();
@@ -122,7 +130,7 @@ std::vector<cuda_icp::RegistrationResult> PoseRefine::process_batch(std::vector<
 #else
             result_poses[j+i] = cuda_icp::ICP_Point2Plane_cpu(pcd1_cpu, scene, criteria);
 #endif
-            result_poses[j+i].transformation_ = result_poses[j+i].transformation_ * previous_T;
+            result_poses[j+i].transformation_ = to_mm(result_poses[j+i].transformation_) * previous_T;
         }
     };
 
@@ -141,6 +149,58 @@ std::vector<cuda_icp::RegistrationResult> PoseRefine::process_batch(std::vector<
     }
 
     return result_poses;
+}
+
+std::vector<cuda_icp::RegistrationResult> PoseRefine::results_filter(std::vector<cuda_icp::RegistrationResult> &results,
+                                                                     float edge_hit_rate_thresh, float fitness_thresh, float rmse_thresh)
+{
+    std::vector<cuda_icp::RegistrationResult> filtered;
+
+    for(auto& res: results){
+        if(res.fitness_>fitness_thresh && res.inlier_rmse_<rmse_thresh){
+            filtered.push_back(res);
+        }
+    }
+
+    std::vector<cuda_renderer::Model::mat4x4> mat4_v(filtered.size());
+    for(int i=0; i<filtered.size(); i++){
+        mat4_v[i] = reinterpret_cast<cuda_renderer::Model::mat4x4&>(filtered[i].transformation_);
+    }
+
+    int down_sample = 2;
+    assert(width%down_sample == 0 && height%down_sample == 0);
+    const int width_local = width/down_sample;
+    const int height_local = height/down_sample;
+
+    cv::Mat depth_edge_local;
+    cv::resize(scene_dep_edge, depth_edge_local, {width_local, height_local}, cv::INTER_NEAREST);
+
+#ifdef CUDA_ON
+    auto depths = cuda_renderer::render_cuda(model.tris, mat4_v, width_local, height_local, proj_mat);
+#else
+    auto depths = cuda_renderer::render_cpu(model.tris, mat4_v, width_local, height_local, proj_mat);
+#endif
+
+    std::vector<cuda_icp::RegistrationResult> filtered2;
+
+#pragma omp declare reduction (merge : std::vector<cuda_icp::RegistrationResult> : \
+    omp_out.insert(omp_out.end(), omp_in.begin(), omp_in.end()))
+
+#pragma omp parallel for reduction(merge: filtered2)
+    for(int i=0; i<filtered.size(); i++){
+        cv::Mat depth_int(height_local, width_local, CV_32SC1, depths.data() + i*width_local*height_local);
+        cv::Mat mask = depth_int > 0;
+        cv::Mat mask_erode;
+        cv::erode(mask, mask_erode, cv::Mat());
+        cv::Mat mask_edge;
+        cv::bitwise_xor(mask, mask_erode, mask_edge);
+
+        cv::Mat hit_edge;
+        cv::bitwise_and(mask_edge, depth_edge_local, hit_edge);
+        float hit_rate = float(cv::countNonZero(hit_edge))/cv::countNonZero(mask_edge);
+        if(hit_rate > edge_hit_rate_thresh) filtered2.push_back(filtered[i]);
+    }
+    return filtered2;
 }
 
 cv::Mat so3_map(cv::Mat rot_vec){
@@ -501,7 +561,7 @@ cv::Mat PoseRefine::get_depth_edge(cv::Mat &depth__, cv::Mat K)
     cv::Mat dst;
     cv::bitwise_or(high_curvature_edge, occ_edge, dst);
 
-//    cv::dilate(dst, dst, cv::Mat());
+    cv::dilate(dst, dst, cv::Mat());
 
 //    cv::bitwise_not(dst, dst);
 //    cv::distanceTransform(dst, dst, CV_DIST_C, 3);  //dilute distance
