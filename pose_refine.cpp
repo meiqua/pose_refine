@@ -255,7 +255,7 @@ std::vector<cuda_icp::RegistrationResult> PoseRefine::results_filter(std::vector
             temp.result = filtered[i];
 
             cv::Mat Points;
-            cv::findNonZero(mask, Points);
+            cv::findNonZero(mask_edge, Points);  // faster than mask
             temp.bbox = boundingRect(Points);
 
             temp.score = 1/(filtered[i].inlier_rmse_ + 0.01f);
