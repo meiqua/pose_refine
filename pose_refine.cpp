@@ -75,10 +75,11 @@ static inline float computeOverlap(const T& a, const T& b)
 
 // ---------------------helper end--------------------------------
 
-PoseRefine::PoseRefine(cv::Mat depth, cv::Mat K, std::string model_path): model(model_path)
+
+PoseRefine::PoseRefine(std::string model_path, cv::Mat depth, cv::Mat K): model(model_path)
 {
-    set_K(K);
-    set_depth(depth);
+    if(!K.empty()) set_K(K);
+    if(!depth.empty()) set_depth(depth);
 }
 
 void PoseRefine::set_depth(cv::Mat depth)
@@ -100,7 +101,17 @@ void PoseRefine::set_depth(cv::Mat depth)
 
 void PoseRefine::set_K(cv::Mat K)
 {
+    assert(K.type() == CV_32F);
     this->K = K;
+}
+
+void PoseRefine::set_K_width_height(cv::Mat K, int width, int height)
+{
+    assert(K.type() == CV_32F);
+    this->K = K;
+    this->width = width;
+    this->height = height;
+    proj_mat = cuda_renderer::compute_proj(K, width, height);
 }
 
 std::vector<cuda_icp::RegistrationResult> PoseRefine::process_batch(std::vector<cv::Mat>& init_poses,
@@ -313,16 +324,13 @@ auto PoseRefine::render_what(F f, std::vector<cv::Mat> &init_poses, int down_sam
     const int width_local = width/down_sample;
     const int height_local = height/down_sample;
 
-    Mat3x3f K_icp((float*)K.data); // ugly but useful
-    K_icp[0][0] /= down_sample; K_icp[1][1] /= down_sample;
-    K_icp[0][2] /= down_sample; K_icp[1][2] /= down_sample;
-
     std::vector<cuda_renderer::Model::mat4x4> mat4_v(init_poses.size());
     for(size_t i=0; i<init_poses.size();i++) mat4_v[i].init_from_cv(init_poses[i]);
 
 #ifdef CUDA_ON
         auto depths = cuda_renderer::render_cuda_keep_in_gpu(model.tris, mat4_v,
                                                            width_local, height_local, proj_mat);
+
         return f(depths, width_local, height_local, init_poses.size());
 
 #else

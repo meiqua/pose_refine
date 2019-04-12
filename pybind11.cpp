@@ -4,7 +4,7 @@
 #include "pose_refine.h"
 namespace py = pybind11;
 
-PYBIND11_MODULE(linemodLevelup_pybind, m) {
+PYBIND11_MODULE(pose_refine_pybind, m) {
     NDArrayConverter::init_numpy();
 
     py::class_<Mat4x4f>(m, "Mat4x4f", py::buffer_protocol())
@@ -27,12 +27,14 @@ PYBIND11_MODULE(linemodLevelup_pybind, m) {
             .def_readwrite("transformation_", &cuda_icp::RegistrationResult::transformation_);
 
     py::class_<PoseRefine>(m, "PoseRefine")
-            .def(py::init<cv::Mat, cv::Mat, std::string>())
+            .def(py::init<std::string, cv::Mat, cv::Mat>(), py::arg("model_path"),
+                 py::arg("depth") = cv::Mat(), py::arg("K") = cv::Mat())
             .def("set_depth", &PoseRefine::set_depth)
             .def("set_K", &PoseRefine::set_K)
-            .def("render_depth", &PoseRefine::render_depth, py::arg("init_poses"), py::arg("down_sample") = 2)
-            .def("render_mask", &PoseRefine::render_mask, py::arg("init_poses"), py::arg("down_sample") = 2)
-            .def("render_depth_mask", &PoseRefine::render_depth_mask, py::arg("init_poses"), py::arg("down_sample") = 2)
+            .def("set_K_width_height", &PoseRefine::set_K_width_height)
+            .def("render_depth", &PoseRefine::render_depth, py::arg("init_poses"), py::arg("down_sample") = 1)
+            .def("render_mask", &PoseRefine::render_mask, py::arg("init_poses"), py::arg("down_sample") = 1)
+            .def("render_depth_mask", &PoseRefine::render_depth_mask, py::arg("init_poses"), py::arg("down_sample") = 1)
             .def("process_batch", &PoseRefine::process_batch, py::arg("init_poses"),
                   py::arg("down_sample") = 2, py::arg("depth_aligned") = false)
             .def("poses_extend", &PoseRefine::poses_extend, py::arg("init_poses"),

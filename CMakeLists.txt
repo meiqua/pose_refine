@@ -4,8 +4,8 @@ project(pose_refine)
 
 option(USE_CUDA "use cuda or not" ON)
 
-#SET(CMAKE_BUILD_TYPE "Release")
-SET(CMAKE_BUILD_TYPE "Debug")
+SET(CMAKE_BUILD_TYPE "Release")
+#SET(CMAKE_BUILD_TYPE "Debug")
 
 SET(CMAKE_CXX_FLAGS "-fPIC -fopenmp -Wall -Wno-sign-compare $ENV{CXXFLAGS}")
 SET(CMAKE_CXX_FLAGS_DEBUG "-O0 -g2 -ggdb")
@@ -44,7 +44,7 @@ list(APPEND pose_refine_lib ${Open3D_LIBRARIES})
 
 
 # pybind11
-find_package(PythonLibs 3 REQUIRED)
+#find_package(PythonLibs 3 REQUIRED)
 find_package(pybind11 REQUIRED)
 include(Cmake/FindNumPy.cmake)
 

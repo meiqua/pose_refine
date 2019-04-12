@@ -276,6 +276,7 @@ std::vector<cv::Mat> raw2depth_uint16_cuda(device_vector_holder<int> &raw_data, 
     std::vector<cv::Mat> depths(pose_size);
     for(auto& dep: depths){
         dep = cv::Mat(height, width, CV_16U);
+        assert(dep.isContinuous());
     }
 
     thrust::device_vector<uint16_t> int16_data(raw_data.size());
@@ -285,8 +286,8 @@ std::vector<cv::Mat> raw2depth_uint16_cuda(device_vector_holder<int> &raw_data, 
 
     size_t step = width*height;
     for(int i=0; i<pose_size; i++){
-        thrust::copy(thrust::cuda::par.on(cudaStreamPerThread),
-                     int16_data.begin() + i*step, int16_data.begin() + (i+1)*step, depths[i].data);
+        // copy can't be used with stream?
+        thrust::copy(int16_data.begin() + i*step, int16_data.begin() + (i+1)*step, (uint16_t*)depths[i].data);
     }
     cudaStreamSynchronize(cudaStreamPerThread);
     return depths;
@@ -308,8 +309,8 @@ std::vector<cv::Mat> raw2mask_uint8_cuda(device_vector_holder<int> &raw_data, si
 
     size_t step = width*height;
     for(int i=0; i<pose_size; i++){
-        thrust::copy(thrust::cuda::par.on(cudaStreamPerThread),
-                     int8_data.begin() + i*step, int8_data.begin() + (i+1)*step, masks[i].data);
+        // copy can't be used with stream?
+        thrust::copy(int8_data.begin() + i*step, int8_data.begin() + (i+1)*step, masks[i].data);
     }
     cudaStreamSynchronize(cudaStreamPerThread);
 
@@ -340,18 +341,18 @@ std::vector<std::vector<cv::Mat> > raw2depth_mask_cuda(device_vector_holder<int3
     uint8_t* mask_ptr = thrust::raw_pointer_cast(int8_data.data());
 
     const size_t threadsPerBlock = 256;
-    const size_t numBlocks((raw_data.size() + threadsPerBlock - 1) / threadsPerBlock);
-    raw2depth_mask_kernel<<<threadsPerBlock, numBlocks>>>(raw_data.data(), raw_data.size(), depth_ptr, mask_ptr);
+    const size_t numBlocks = (raw_data.size() + threadsPerBlock - 1) / threadsPerBlock;
+    raw2depth_mask_kernel<<<numBlocks, threadsPerBlock>>>(raw_data.data(), raw_data.size(), depth_ptr, mask_ptr);
     cudaStreamSynchronize(cudaStreamPerThread);
 
     size_t step = width*height;
     for(size_t i=0; i<pose_size; i++){
-        thrust::copy(thrust::cuda::par.on(cudaStreamPerThread),
-                     int16_data.begin() + i*step, int16_data.begin() + (i+1)*step, results[i][0].data);
-        thrust::copy(thrust::cuda::par.on(cudaStreamPerThread),
-                     int8_data.begin() + i*step, int8_data.begin() + (i+1)*step, results[i][1].data);
+        // copy can't be used with stream?
+        thrust::copy(int16_data.begin() + i*step, int16_data.begin() + (i+1)*step, (uint16_t*)results[i][0].data);
+        thrust::copy(int8_data.begin() + i*step, int8_data.begin() + (i+1)*step, results[i][1].data);
     }
     cudaStreamSynchronize(cudaStreamPerThread);
+
     return results;
 }
 

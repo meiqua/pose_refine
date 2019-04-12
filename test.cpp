@@ -409,12 +409,7 @@ timer.out("ICP_Point2Plane_cuda");
 // hinterstoisser doumanoglou tejani
 string dataset_prefix = "/home/meiqua/patch_linemod/public/datasets/hinterstoisser/test/03/";
 
-int main(int argc, char const *argv[]){
-
-#ifdef CUDA_ON
-//    test_cuda_icp();
-#endif
-
+void depth_edge_test(){
     vector<string> rgb_paths, depth_paths;
     for (const auto & p : fs::directory_iterator(dataset_prefix + "rgb/"))
         rgb_paths.push_back(p.path());
@@ -436,6 +431,41 @@ int main(int argc, char const *argv[]){
         imshow("depth edge", depth_edge);
         waitKey(0);
     }
+}
 
+void renderer_interface_test(){
+    int width = 640; int height = 480;
+
+    cuda_renderer::Model model(prefix+"obj_06.ply");
+
+    Mat K = (Mat_<float>(3,3) << 572.4114, 0.0, 325.2611, 0.0, 573.57043, 242.04899, 0.0, 0.0, 1.0);
+    PoseRefine refiner(prefix + "obj_06.ply");
+    refiner.set_K_width_height(K, width, height);
+
+    Mat R_ren = (Mat_<float>(3,3) << 0.34768538, 0.93761126, 0.00000000, 0.70540612,
+                 -0.26157897, -0.65877056, -0.61767070, 0.22904489, -0.75234390);
+    Mat t_ren = (Mat_<float>(3,1) << 0.0, 0.0, 300.0);
+
+    Mat init = Mat::eye(4, 4, CV_32F);
+    R_ren.copyTo(init(Rect(0, 0, 3, 3)));
+    t_ren.copyTo(init(Rect(3, 0, 1, 3)));
+    cout << "init" << init << endl;
+
+    vector<Mat> poses(1, init);
+    auto deps = refiner.render_depth(poses);
+    auto masks = refiner.render_mask(poses);
+    auto dep_masks = refiner.render_depth_mask(poses);
+
+    imshow("mask1", masks[0]);
+    imshow("mask2", dep_masks[0][1]);
+    waitKey(0);
+}
+
+int main(int argc, char const *argv[]){
+
+#ifdef CUDA_ON
+//    test_cuda_icp();
+#endif
+    renderer_interface_test();
     return 0;
 }

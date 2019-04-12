@@ -332,10 +332,6 @@ std::vector<cv::Mat> raw2mask_uint8_cpu(std::vector<int32_t> &raw_data, size_t w
     return masks;
 }
 
-
-
-
-
 std::vector<std::vector<cv::Mat> > raw2depth_mask_cpu(std::vector<int32_t> &raw_data, size_t width, size_t height, size_t pose_size)
 {
     assert(raw_data.size() == width*height*pose_size);
