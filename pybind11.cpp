@@ -28,6 +28,11 @@ PYBIND11_MODULE(linemodLevelup_pybind, m) {
 
     py::class_<PoseRefine>(m, "PoseRefine")
             .def(py::init<cv::Mat, cv::Mat, std::string>())
+            .def("set_depth", &PoseRefine::set_depth)
+            .def("set_K", &PoseRefine::set_K)
+            .def("render_depth", &PoseRefine::render_depth, py::arg("init_poses"), py::arg("down_sample") = 2)
+            .def("render_mask", &PoseRefine::render_mask, py::arg("init_poses"), py::arg("down_sample") = 2)
+            .def("render_depth_mask", &PoseRefine::render_depth_mask, py::arg("init_poses"), py::arg("down_sample") = 2)
             .def("process_batch", &PoseRefine::process_batch, py::arg("init_poses"),
                   py::arg("down_sample") = 2, py::arg("depth_aligned") = false)
             .def("poses_extend", &PoseRefine::poses_extend, py::arg("init_poses"),

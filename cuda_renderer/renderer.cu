@@ -253,5 +253,107 @@ device_vector_holder<int> render_cuda_keep_in_gpu(const std::vector<Model::Trian
     return device_depth_int;
 }
 
+struct thrust__int32_uint16
+{
+  __host__ __device__ uint16_t operator()(const int &x) const
+  {
+    return uint16_t(x);
+  }
+};
+
+struct thrust__int32_to_mask
+{
+  __host__ __device__ uint8_t operator()(const int &x) const
+  {
+    return (x > 0) ? 255 : 0;
+  }
+};
+
+std::vector<cv::Mat> raw2depth_uint16_cuda(device_vector_holder<int> &raw_data, size_t width, size_t height, size_t pose_size)
+{
+    assert(raw_data.size() == width*height*pose_size);
+
+    std::vector<cv::Mat> depths(pose_size);
+    for(auto& dep: depths){
+        dep = cv::Mat(height, width, CV_16U);
+    }
+
+    thrust::device_vector<uint16_t> int16_data(raw_data.size());
+    thrust::transform(thrust::cuda::par.on(cudaStreamPerThread),
+                      raw_data.begin_thr(), raw_data.end_thr(), int16_data.begin(), thrust__int32_uint16());
+    cudaStreamSynchronize(cudaStreamPerThread);
+
+    size_t step = width*height;
+    for(int i=0; i<pose_size; i++){
+        thrust::copy(thrust::cuda::par.on(cudaStreamPerThread),
+                     int16_data.begin() + i*step, int16_data.begin() + (i+1)*step, depths[i].data);
+    }
+    cudaStreamSynchronize(cudaStreamPerThread);
+    return depths;
+}
+
+std::vector<cv::Mat> raw2mask_uint8_cuda(device_vector_holder<int> &raw_data, size_t width, size_t height, size_t pose_size)
+{
+    assert(raw_data.size() == width*height*pose_size);
+
+    std::vector<cv::Mat> masks(pose_size);
+    for(auto& mask: masks){
+        mask = cv::Mat(height, width, CV_8U);
+    }
+
+    thrust::device_vector<uint8_t> int8_data(raw_data.size());
+    thrust::transform(thrust::cuda::par.on(cudaStreamPerThread),
+                      raw_data.begin_thr(), raw_data.end_thr(), int8_data.begin(), thrust__int32_to_mask());
+    cudaStreamSynchronize(cudaStreamPerThread);
+
+    size_t step = width*height;
+    for(int i=0; i<pose_size; i++){
+        thrust::copy(thrust::cuda::par.on(cudaStreamPerThread),
+                     int8_data.begin() + i*step, int8_data.begin() + (i+1)*step, masks[i].data);
+    }
+    cudaStreamSynchronize(cudaStreamPerThread);
+
+    return masks;
+}
+
+__global__ void raw2depth_mask_kernel(int* raw_data_ptr, int raw_data_size, uint16_t* depth_ptr, uint8_t* mask_ptr){
+    size_t i = blockIdx.x*blockDim.x + threadIdx.x;
+    if(i>=raw_data_size) return;
+    depth_ptr[i] = uint16_t(raw_data_ptr[i]);
+    mask_ptr[i] = (raw_data_ptr[i] > 0) ? 255 : 0;
+}
+
+std::vector<std::vector<cv::Mat> > raw2depth_mask_cuda(device_vector_holder<int32_t> &raw_data, size_t width, size_t height, size_t pose_size)
+{
+    assert(raw_data.size() == width*height*pose_size);
+
+    std::vector<std::vector<cv::Mat>> results(pose_size, std::vector<cv::Mat>(2));
+    for(auto& dep_mask: results){
+        dep_mask[0] = cv::Mat(height, width, CV_16U);
+        dep_mask[1] = cv::Mat(height, width, CV_8U);
+    }
+
+    thrust::device_vector<uint16_t> int16_data(raw_data.size());
+    thrust::device_vector<uint8_t> int8_data(raw_data.size());
+
+    uint16_t* depth_ptr = thrust::raw_pointer_cast(int16_data.data());
+    uint8_t* mask_ptr = thrust::raw_pointer_cast(int8_data.data());
+
+    const size_t threadsPerBlock = 256;
+    const size_t numBlocks((raw_data.size() + threadsPerBlock - 1) / threadsPerBlock);
+    raw2depth_mask_kernel<<<threadsPerBlock, numBlocks>>>(raw_data.data(), raw_data.size(), depth_ptr, mask_ptr);
+    cudaStreamSynchronize(cudaStreamPerThread);
+
+    size_t step = width*height;
+    for(size_t i=0; i<pose_size; i++){
+        thrust::copy(thrust::cuda::par.on(cudaStreamPerThread),
+                     int16_data.begin() + i*step, int16_data.begin() + (i+1)*step, results[i][0].data);
+        thrust::copy(thrust::cuda::par.on(cudaStreamPerThread),
+                     int8_data.begin() + i*step, int8_data.begin() + (i+1)*step, results[i][1].data);
+    }
+    cudaStreamSynchronize(cudaStreamPerThread);
+    return results;
+}
+
 }
 

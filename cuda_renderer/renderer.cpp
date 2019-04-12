@@ -288,3 +288,75 @@ std::vector<int32_t> cuda_renderer::render_cpu(const std::vector<cuda_renderer::
 }
 
 
+
+std::vector<cv::Mat> raw2depth_uint16_cpu(std::vector<int32_t> &raw_data, size_t width, size_t height, size_t pose_size)
+{
+    assert(raw_data.size() == width*height*pose_size);
+
+    std::vector<cv::Mat> depths(pose_size);
+    for(auto& dep: depths){
+        dep = cv::Mat(height, width, CV_16U);
+    }
+
+    size_t step = width*height;
+
+    for(size_t i=0; i<pose_size; i++){
+        for(int r=0; r<height; r++){
+            for(int c=0; c<height; c++){
+                depths[i].at<uint16_t>(r, c) = uint16_t(raw_data[i*step + width*r + c]);
+            }
+        }
+    }
+
+    return depths;
+}
+
+std::vector<cv::Mat> raw2mask_uint8_cpu(std::vector<int32_t> &raw_data, size_t width, size_t height, size_t pose_size)
+{
+    assert(raw_data.size() == width*height*pose_size);
+
+    std::vector<cv::Mat> masks(pose_size);
+    for(auto& mask: masks){
+        mask = cv::Mat(height, width, CV_8U);
+    }
+
+    size_t step = width*height;
+    for(size_t i=0; i<pose_size; i++){
+        for(int r=0; r<height; r++){
+            for(int c=0; c<height; c++){
+                masks[i].at<uchar>(r, c) = ((raw_data[i*step + width*r + c] > 0)?255:0);
+            }
+        }
+    }
+
+    return masks;
+}
+
+
+
+
+
+std::vector<std::vector<cv::Mat> > raw2depth_mask_cpu(std::vector<int32_t> &raw_data, size_t width, size_t height, size_t pose_size)
+{
+    assert(raw_data.size() == width*height*pose_size);
+
+    std::vector<std::vector<cv::Mat>> results(pose_size, std::vector<cv::Mat>(2));
+    for(auto& dep_mask: results){
+        dep_mask[0] = cv::Mat(height, width, CV_16U);
+        dep_mask[1] = cv::Mat(height, width, CV_8U);
+    }
+
+    size_t step = width*height;
+    for(size_t i=0; i<pose_size; i++){
+        for(int r=0; r<height; r++){
+            for(int c=0; c<height; c++){
+
+                auto& raw = raw_data[i*step + width*r + c];
+                results[i][0].at<uint16_t>(r, c) = uint16_t(raw);
+                results[i][1].at<uchar>(r, c) = ((raw > 0)?255:0);
+            }
+        }
+    }
+
+    return results;
+}

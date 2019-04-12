@@ -185,6 +185,10 @@ std::vector<int32_t> render_cpu(const std::vector<Model::Triangle>& tris,const s
                             size_t width, size_t height, const Model::mat4x4& proj_mat,
                                 const Model::ROI roi= {0, 0, 0, 0});
 
+std::vector<cv::Mat> raw2depth_uint16_cpu(std::vector<int32_t>& raw_data, size_t width, size_t height, size_t pose_size);
+std::vector<cv::Mat> raw2mask_uint8_cpu(std::vector<int32_t>& raw_data, size_t width, size_t height, size_t pose_size);
+std::vector<std::vector<cv::Mat>> raw2depth_mask_cpu(std::vector<int32_t>& raw_data, size_t width, size_t height, size_t pose_size);
+
 #ifdef CUDA_ON
 std::vector<int32_t> render_cuda(const std::vector<Model::Triangle>& tris,const std::vector<Model::mat4x4>& poses,
                             size_t width, size_t height, const Model::mat4x4& proj_mat,
@@ -193,6 +197,11 @@ std::vector<int32_t> render_cuda(const std::vector<Model::Triangle>& tris,const 
 device_vector_holder<int> render_cuda_keep_in_gpu(const std::vector<Model::Triangle>& tris,const std::vector<Model::mat4x4>& poses,
                             size_t width, size_t height, const Model::mat4x4& proj_mat,
                                                        const Model::ROI roi= {0, 0, 0, 0});
+
+std::vector<cv::Mat> raw2depth_uint16_cuda(device_vector_holder<int>& raw_data, size_t width, size_t height, size_t pose_size);
+std::vector<cv::Mat> raw2mask_uint8_cuda(device_vector_holder<int>& raw_data, size_t width, size_t height, size_t pose_size);
+std::vector<std::vector<cv::Mat>> raw2depth_mask_cuda(device_vector_holder<int32_t>& raw_data, size_t width, size_t height, size_t pose_size);
+
 #endif
 
 //low_level

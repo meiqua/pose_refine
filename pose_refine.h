@@ -32,6 +32,8 @@ public:
     int batch_size = 8;
 #endif
     PoseRefine(cv::Mat depth, cv::Mat K, std::string model_path);
+    void set_depth(cv::Mat depth);
+    void set_K(cv::Mat K);
 
     // Only search rotation neibor, default is 18 degree.
     // Because linemod can make sure tanslation error is in 4 pixels.
@@ -44,6 +46,13 @@ public:
                                                             float edge_hit_rate_thresh = 0.7f,
                                                             float fitness_thresh = 0.7f,
                                                             float rmse_thresh = 0.07f);
+
+    std::vector<cv::Mat> render_depth(std::vector<cv::Mat>& init_poses, int down_sample = 2);
+    std::vector<cv::Mat> render_mask(std::vector<cv::Mat>& init_poses, int down_sample = 2);
+    std::vector<std::vector<cv::Mat>> render_depth_mask(std::vector<cv::Mat>& init_poses, int down_sample = 2);
+
+    template<typename F>
+    auto render_what(F f, std::vector<cv::Mat>& init_poses, int down_sample = 2);
 
     static cv::Mat get_normal(cv::Mat& depth, cv::Mat K = cv::Mat());
     static cv::Mat get_depth_edge(cv::Mat& depth, cv::Mat K = cv::Mat());

@@ -77,14 +77,17 @@ static inline float computeOverlap(const T& a, const T& b)
 
 PoseRefine::PoseRefine(cv::Mat depth, cv::Mat K, std::string model_path): model(model_path)
 {
-    assert(depth.type() == CV_16U && K.type() == CV_32F);
+    set_K(K);
+    set_depth(depth);
+}
 
+void PoseRefine::set_depth(cv::Mat depth)
+{
+    assert(depth.type() == CV_16U && K.type() == CV_32F);
     scene_depth = depth;
-    this->K = K;
     scene_dep_edge = get_depth_edge(depth, K);
     width = depth.cols;
     height = depth.rows;
-
     proj_mat = cuda_renderer::compute_proj(K, width, height);
 
 #ifdef CUDA_ON
@@ -93,6 +96,11 @@ PoseRefine::PoseRefine(cv::Mat depth, cv::Mat K, std::string model_path): model(
 #else
     scene.init_Scene_projective_cpu(scene_depth, reinterpret_cast<Mat3x3f&>(K), pcd_buffer, normal_buffer);
 #endif
+}
+
+void PoseRefine::set_K(cv::Mat K)
+{
+    this->K = K;
 }
 
 std::vector<cuda_icp::RegistrationResult> PoseRefine::process_batch(std::vector<cv::Mat>& init_poses,
@@ -196,16 +204,13 @@ std::vector<cuda_icp::RegistrationResult> PoseRefine::results_filter(std::vector
 {
     // first pass, check rmse & fitness
     std::vector<cuda_icp::RegistrationResult> filtered;
+    std::vector<cuda_renderer::Model::mat4x4> mat4_v;
 
     for(auto& res: results){
         if(res.fitness_>fitness_thresh && res.inlier_rmse_<rmse_thresh){
             filtered.push_back(res);
+            mat4_v.push_back(reinterpret_cast<cuda_renderer::Model::mat4x4&>(res.transformation_));
         }
-    }
-
-    std::vector<cuda_renderer::Model::mat4x4> mat4_v(filtered.size());
-    for(int i=0; i<filtered.size(); i++){
-        mat4_v[i] = reinterpret_cast<cuda_renderer::Model::mat4x4&>(filtered[i].transformation_);
     }
 
     // second pass, check edge hit
@@ -301,6 +306,59 @@ std::vector<cuda_icp::RegistrationResult> PoseRefine::results_filter(std::vector
     return filtered3;
 }
 
+template<typename F>
+auto PoseRefine::render_what(F f, std::vector<cv::Mat> &init_poses, int down_sample)
+{
+    assert(width%down_sample == 0 && height%down_sample == 0);
+    const int width_local = width/down_sample;
+    const int height_local = height/down_sample;
+
+    Mat3x3f K_icp((float*)K.data); // ugly but useful
+    K_icp[0][0] /= down_sample; K_icp[1][1] /= down_sample;
+    K_icp[0][2] /= down_sample; K_icp[1][2] /= down_sample;
+
+    std::vector<cuda_renderer::Model::mat4x4> mat4_v(init_poses.size());
+    for(size_t i=0; i<init_poses.size();i++) mat4_v[i].init_from_cv(init_poses[i]);
+
+#ifdef CUDA_ON
+        auto depths = cuda_renderer::render_cuda_keep_in_gpu(model.tris, mat4_v,
+                                                           width_local, height_local, proj_mat);
+        return f(depths, width_local, height_local, init_poses.size());
+
+#else
+        auto depths = cuda_renderer::render_cpu(model.tris, mat4_v,
+                                                           width_local, height_local, proj_mat);
+        return f(depths, width_local, height_local, init_poses.size());
+#endif
+}
+
+std::vector<cv::Mat> PoseRefine::render_depth(std::vector<cv::Mat> &init_poses, int down_sample)
+{
+#ifdef CUDA_ON
+    return render_what(cuda_renderer::raw2depth_uint16_cuda, init_poses, down_sample);
+#else
+    return render_what(cuda_renderer::raw2depth_uint16_cpu, init_poses, down_sample);
+#endif
+}
+
+std::vector<cv::Mat> PoseRefine::render_mask(std::vector<cv::Mat> &init_poses, int down_sample)
+{
+#ifdef CUDA_ON
+    return render_what(cuda_renderer::raw2mask_uint8_cuda, init_poses, down_sample);
+#else
+    return render_what(cuda_renderer::raw2mask_uint8_cpu, init_poses, down_sample);
+#endif
+}
+
+std::vector<std::vector<cv::Mat> > PoseRefine::render_depth_mask(std::vector<cv::Mat> &init_poses, int down_sample)
+{
+#ifdef CUDA_ON
+    return render_what(cuda_renderer::raw2depth_mask_cuda, init_poses, down_sample);
+#else
+    return render_what(cuda_renderer::raw2depth_mask_cpu, init_poses, down_sample);
+#endif
+}
+
 cv::Mat so3_map(cv::Mat rot_vec){
     assert(rot_vec.rows == 3 && rot_vec.cols == 1 && rot_vec.type() == CV_32F);
 
@@ -323,7 +381,7 @@ std::vector<cv::Mat> PoseRefine::poses_extend(std::vector<cv::Mat> &init_poses, 
     assert(init_poses.size() > 0);
     assert(init_poses[0].type() == CV_32F && init_poses[0].rows == 4 && init_poses[0].cols == 4);
 
-    std::vector<cv::Mat> extended(init_poses.size() * 27, cv::Mat(4, 4, CV_32F));
+    std::vector<cv::Mat> extended(init_poses.size() * 27);
     for(size_t pose_iter=0; pose_iter<init_poses.size(); pose_iter++){
         auto& pose = init_poses[pose_iter];
 
@@ -341,8 +399,7 @@ std::vector<cv::Mat> PoseRefine::poses_extend(std::vector<cv::Mat> &init_poses, 
                     cv::Mat rot_vec(3, 1, CV_32F, vec_data);
                     cv::Mat delta_R = so3_map(rot_vec);
 
-//                    extended_cur = pose.clone(); // clone allocate new heap
-                    pose.copyTo(extended_cur);
+                    extended_cur = pose.clone();
                     cv::Mat R = pose(cv::Rect(0, 0, 3, 3));
                     extended_cur(cv::Rect(0, 0, 3, 3)) = delta_R * R;
 
@@ -665,3 +722,4 @@ cv::Mat PoseRefine::get_depth_edge(cv::Mat &depth__, cv::Mat K)
 //    cv::distanceTransform(dst, dst, CV_DIST_C, 3);  //dilute distance
     return dst;
 }
+
