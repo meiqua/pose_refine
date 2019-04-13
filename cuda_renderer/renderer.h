@@ -145,6 +145,7 @@ public:
     void get_bounding_box(aiVector3D& min, aiVector3D& max) const;
 };
 
+
 #ifdef CUDA_ON
 // thrust device vector can't be used in cpp by design
 // same codes in cuda renderer,
@@ -174,6 +175,7 @@ public:
 };
 
 extern template class device_vector_holder<int>;
+extern template class device_vector_holder<Model::Triangle>;
 #endif
 
 std::vector<Model::mat4x4> mat_to_compact_4x4(const std::vector<cv::Mat>& poses);
@@ -194,14 +196,21 @@ std::vector<int32_t> render_cuda(const std::vector<Model::Triangle>& tris,const 
                             size_t width, size_t height, const Model::mat4x4& proj_mat,
                                  const Model::ROI roi= {0, 0, 0, 0});
 
+std::vector<int32_t> render_cuda(device_vector_holder<Model::Triangle>& tris,const std::vector<Model::mat4x4>& poses,
+                            size_t width, size_t height, const Model::mat4x4& proj_mat,
+                                 const Model::ROI roi= {0, 0, 0, 0});
+
 device_vector_holder<int> render_cuda_keep_in_gpu(const std::vector<Model::Triangle>& tris,const std::vector<Model::mat4x4>& poses,
+                            size_t width, size_t height, const Model::mat4x4& proj_mat,
+                                                       const Model::ROI roi= {0, 0, 0, 0});
+
+device_vector_holder<int> render_cuda_keep_in_gpu(device_vector_holder<Model::Triangle>& tris,const std::vector<Model::mat4x4>& poses,
                             size_t width, size_t height, const Model::mat4x4& proj_mat,
                                                        const Model::ROI roi= {0, 0, 0, 0});
 
 std::vector<cv::Mat> raw2depth_uint16_cuda(device_vector_holder<int>& raw_data, size_t width, size_t height, size_t pose_size);
 std::vector<cv::Mat> raw2mask_uint8_cuda(device_vector_holder<int>& raw_data, size_t width, size_t height, size_t pose_size);
 std::vector<std::vector<cv::Mat>> raw2depth_mask_cuda(device_vector_holder<int32_t>& raw_data, size_t width, size_t height, size_t pose_size);
-
 #endif
 
 //low_level

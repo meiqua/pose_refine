@@ -19,7 +19,8 @@ public:
     cuda_renderer::Model model;
     cuda_renderer::Model::mat4x4 proj_mat;
 #ifdef CUDA_ON
-    device_vector_holder<::Vec3f> pcd_buffer_cuda, normal_buffer_cuda;
+    cuda_renderer::device_vector_holder<cuda_renderer::Model::Triangle> device_tris;
+    ::device_vector_holder<::Vec3f> pcd_buffer_cuda, normal_buffer_cuda;
 #else
     std::vector<::Vec3f> pcd_buffer, normal_buffer;
 #endif
@@ -58,4 +59,5 @@ public:
 
     static cv::Mat get_normal(cv::Mat& depth, cv::Mat K = cv::Mat());
     static cv::Mat get_depth_edge(cv::Mat& depth, cv::Mat K = cv::Mat());
+    cv::Mat view_dep(cv::Mat dep);
 };

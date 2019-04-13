@@ -47,6 +47,7 @@ device_vector_holder<T>::device_vector_holder(size_t size_){
 }
 
 template class device_vector_holder<int>;
+template class device_vector_holder<Model::Triangle>;
 
 void print_cuda_memory_usage(){
     // show memory usage of GPU
@@ -217,6 +218,45 @@ std::vector<int32_t> render_cuda(const std::vector<Model::Triangle>& tris,const 
     return result_depth;
 }
 
+std::vector<int32_t> render_cuda(device_vector_holder<Model::Triangle>& device_tris,const std::vector<Model::mat4x4>& poses,
+                            size_t width, size_t height, const Model::mat4x4& proj_mat, const Model::ROI roi){
+
+    const size_t threadsPerBlock = 256;
+
+    thrust::device_vector<Model::mat4x4> device_poses = poses;
+
+    size_t real_width = width;
+    size_t real_height = height;
+    if(roi.width > 0 && roi.height > 0){
+        real_width = roi.width;
+        real_height = roi.height;
+        assert(roi.x + roi.width <= width && "roi out of image");
+        assert(roi.y + roi.height <= height && "roi out of image");
+    }
+    // atomic min only support int32
+    thrust::device_vector<int32_t> device_depth_int(poses.size()*real_width*real_height, INT_MAX);
+    {
+        Model::mat4x4* device_poses_ptr = thrust::raw_pointer_cast(device_poses.data());
+        int32_t* depth_image_vec = thrust::raw_pointer_cast(device_depth_int.data());
+
+        dim3 numBlocks((device_tris.size() + threadsPerBlock - 1) / threadsPerBlock, poses.size());
+        render_triangle<<<numBlocks, threadsPerBlock>>>(device_tris.data(), device_tris.size(),
+                                                        device_poses_ptr, poses.size(),
+                                                        depth_image_vec, width, height, proj_mat, roi);
+        cudaDeviceSynchronize();
+        gpuErrchk(cudaPeekAtLastError());
+    }
+
+    std::vector<int32_t> result_depth(poses.size()*real_width*real_height);
+    {
+        thrust::transform(device_depth_int.begin(), device_depth_int.end(),
+                          device_depth_int.begin(), max2zero_functor());
+        thrust::copy(device_depth_int.begin(), device_depth_int.end(), result_depth.begin());
+    }
+
+    return result_depth;
+}
+
 device_vector_holder<int> render_cuda_keep_in_gpu(const std::vector<Model::Triangle>& tris,const std::vector<Model::mat4x4>& poses,
                             size_t width, size_t height, const Model::mat4x4& proj_mat, const Model::ROI roi){
 
@@ -253,6 +293,39 @@ device_vector_holder<int> render_cuda_keep_in_gpu(const std::vector<Model::Trian
     return device_depth_int;
 }
 
+device_vector_holder<int> render_cuda_keep_in_gpu(device_vector_holder<Model::Triangle>& tris,const std::vector<Model::mat4x4>& poses,
+                            size_t width, size_t height, const Model::mat4x4& proj_mat, const Model::ROI roi){
+
+    const size_t threadsPerBlock = 256;
+    thrust::device_vector<Model::mat4x4> device_poses = poses;
+
+    size_t real_width = width;
+    size_t real_height = height;
+    if(roi.width > 0 && roi.height > 0){
+        real_width = roi.width;
+        real_height = roi.height;
+    }
+    // atomic min only support int32
+//    thrust::device_vector<int32_t> device_depth_int(poses.size()*real_width*real_height, INT_MAX);
+    device_vector_holder<int> device_depth_int(poses.size()*real_width*real_height, INT_MAX);
+    {
+        Model::mat4x4* device_poses_ptr = thrust::raw_pointer_cast(device_poses.data());
+        int32_t* depth_image_vec = device_depth_int.data();
+
+        dim3 numBlocks((tris.size() + threadsPerBlock - 1) / threadsPerBlock, poses.size());
+        render_triangle<<<numBlocks, threadsPerBlock>>>(tris.data(), tris.size(),
+                                                        device_poses_ptr, poses.size(),
+                                                        depth_image_vec, width, height, proj_mat, roi);
+        cudaDeviceSynchronize();
+        gpuErrchk(cudaPeekAtLastError());
+    }
+
+    thrust::transform(device_depth_int.begin_thr(), device_depth_int.end_thr(),
+                      device_depth_int.begin_thr(), max2zero_functor());
+
+    return device_depth_int;
+}
+
 struct thrust__int32_uint16
 {
   __host__ __device__ uint16_t operator()(const int &x) const
@@ -275,7 +348,7 @@ std::vector<cv::Mat> raw2depth_uint16_cuda(device_vector_holder<int> &raw_data, 
 
     std::vector<cv::Mat> depths(pose_size);
     for(auto& dep: depths){
-        dep = cv::Mat(height, width, CV_16U);
+        dep = cv::Mat(height, width, CV_16U, cv::Scalar(0));
         assert(dep.isContinuous());
     }
 
@@ -299,7 +372,7 @@ std::vector<cv::Mat> raw2mask_uint8_cuda(device_vector_holder<int> &raw_data, si
 
     std::vector<cv::Mat> masks(pose_size);
     for(auto& mask: masks){
-        mask = cv::Mat(height, width, CV_8U);
+        mask = cv::Mat(height, width, CV_8U, cv::Scalar(0));
     }
 
     thrust::device_vector<uint8_t> int8_data(raw_data.size());
@@ -330,8 +403,8 @@ std::vector<std::vector<cv::Mat> > raw2depth_mask_cuda(device_vector_holder<int3
 
     std::vector<std::vector<cv::Mat>> results(pose_size, std::vector<cv::Mat>(2));
     for(auto& dep_mask: results){
-        dep_mask[0] = cv::Mat(height, width, CV_16U);
-        dep_mask[1] = cv::Mat(height, width, CV_8U);
+        dep_mask[0] = cv::Mat(height, width, CV_16U, cv::Scalar(0));
+        dep_mask[1] = cv::Mat(height, width, CV_8U, cv::Scalar(0));
     }
 
     thrust::device_vector<uint16_t> int16_data(raw_data.size());

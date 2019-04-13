@@ -75,6 +75,8 @@ void cuda_renderer::Model::recursive_render(const aiScene *sc, const aiNode *nd,
 
         for (size_t t = 0; t < mesh->mNumFaces; ++t){
             const struct aiFace* face = &mesh->mFaces[t];
+
+            if(face->mNumIndices < 3) continue;  // invalid face, don't know why they exists in hinter obj_03.ply
             assert(face->mNumIndices == 3 && "we only render triangle, use tools like meshlab to modify this models");
 
             Triangle tri_temp;
@@ -287,15 +289,13 @@ std::vector<int32_t> cuda_renderer::render_cpu(const std::vector<cuda_renderer::
     return depth;
 }
 
-
-
-std::vector<cv::Mat> raw2depth_uint16_cpu(std::vector<int32_t> &raw_data, size_t width, size_t height, size_t pose_size)
+std::vector<cv::Mat> cuda_renderer::raw2depth_uint16_cpu(std::vector<int32_t> &raw_data, size_t width, size_t height, size_t pose_size)
 {
     assert(raw_data.size() == width*height*pose_size);
 
     std::vector<cv::Mat> depths(pose_size);
     for(auto& dep: depths){
-        dep = cv::Mat(height, width, CV_16U);
+        dep = cv::Mat(height, width, CV_16U, cv::Scalar(0));
     }
 
     size_t step = width*height;
@@ -311,13 +311,13 @@ std::vector<cv::Mat> raw2depth_uint16_cpu(std::vector<int32_t> &raw_data, size_t
     return depths;
 }
 
-std::vector<cv::Mat> raw2mask_uint8_cpu(std::vector<int32_t> &raw_data, size_t width, size_t height, size_t pose_size)
+std::vector<cv::Mat> cuda_renderer::raw2mask_uint8_cpu(std::vector<int32_t> &raw_data, size_t width, size_t height, size_t pose_size)
 {
     assert(raw_data.size() == width*height*pose_size);
 
     std::vector<cv::Mat> masks(pose_size);
     for(auto& mask: masks){
-        mask = cv::Mat(height, width, CV_8U);
+        mask = cv::Mat(height, width, CV_8U, cv::Scalar(0));
     }
 
     size_t step = width*height;
@@ -332,14 +332,14 @@ std::vector<cv::Mat> raw2mask_uint8_cpu(std::vector<int32_t> &raw_data, size_t w
     return masks;
 }
 
-std::vector<std::vector<cv::Mat> > raw2depth_mask_cpu(std::vector<int32_t> &raw_data, size_t width, size_t height, size_t pose_size)
+std::vector<std::vector<cv::Mat> > cuda_renderer::raw2depth_mask_cpu(std::vector<int32_t> &raw_data, size_t width, size_t height, size_t pose_size)
 {
     assert(raw_data.size() == width*height*pose_size);
 
     std::vector<std::vector<cv::Mat>> results(pose_size, std::vector<cv::Mat>(2));
     for(auto& dep_mask: results){
-        dep_mask[0] = cv::Mat(height, width, CV_16U);
-        dep_mask[1] = cv::Mat(height, width, CV_8U);
+        dep_mask[0] = cv::Mat(height, width, CV_16U, cv::Scalar(0));
+        dep_mask[1] = cv::Mat(height, width, CV_8U, cv::Scalar(0));
     }
 
     size_t step = width*height;

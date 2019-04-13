@@ -76,8 +76,15 @@ static inline float computeOverlap(const T& a, const T& b)
 // ---------------------helper end--------------------------------
 
 
-PoseRefine::PoseRefine(std::string model_path, cv::Mat depth, cv::Mat K): model(model_path)
+PoseRefine::PoseRefine(std::string model_path, cv::Mat depth, cv::Mat K):
+    #ifdef CUDA_ON
+    device_tris(model.tris.size()),
+    #endif
+    model(model_path)  // model first
 {
+#ifdef CUDA_ON
+    thrust::copy(model.tris.begin(), model.tris.end(), device_tris.begin_thr());
+#endif
     if(!K.empty()) set_K(K);
     if(!depth.empty()) set_depth(depth);
 }
@@ -118,7 +125,8 @@ std::vector<cuda_icp::RegistrationResult> PoseRefine::process_batch(std::vector<
                                                                     int down_sample,
                                                                     bool depth_aligned)
 {
-    std::vector<cuda_icp::RegistrationResult> result_poses(init_poses.size());
+    int init_size = init_poses.size();
+    std::vector<cuda_icp::RegistrationResult> result_poses(init_size);
     cuda_icp::ICPConvergenceCriteria criteria;
 
     assert(width%down_sample == 0 && height%down_sample == 0);
@@ -152,7 +160,7 @@ std::vector<cuda_icp::RegistrationResult> PoseRefine::process_batch(std::vector<
     auto icp_batch = [&](int i){
         // directly down sample by viewport
 #ifdef CUDA_ON
-        auto depths = cuda_renderer::render_cuda_keep_in_gpu(model.tris, mat4_v,
+        auto depths = cuda_renderer::render_cuda_keep_in_gpu(device_tris, mat4_v,
                                                            width_local, height_local, proj_mat);
 #else
         auto depths = cuda_renderer::render_cpu(model.tris, mat4_v,
@@ -194,13 +202,12 @@ std::vector<cuda_icp::RegistrationResult> PoseRefine::process_batch(std::vector<
     };
 
     int i=0;
-    for(; i<=init_poses.size()-batch_size; i+=batch_size){
+    for(; i<=init_size-batch_size; i+=batch_size){
         for(int j=0; j<batch_size; j++) mat4_v[j].init_from_cv(init_poses[j+i]);
         icp_batch(i);
     }
 
-    int left = init_poses.size() - i;
-
+    int left = init_size - i;
     if(left > 0){
         mat4_v.resize(left);
         for(int j=0; j<left; j++) mat4_v[j].init_from_cv(init_poses[j+i]);
@@ -223,6 +230,7 @@ std::vector<cuda_icp::RegistrationResult> PoseRefine::results_filter(std::vector
             mat4_v.push_back(reinterpret_cast<cuda_renderer::Model::mat4x4&>(res.transformation_));
         }
     }
+    if(filtered.empty()) return std::vector<cuda_icp::RegistrationResult>();
 
     // second pass, check edge hit
     struct Result_bbox{
@@ -245,7 +253,7 @@ std::vector<cuda_icp::RegistrationResult> PoseRefine::results_filter(std::vector
     cv::resize(scene_dep_edge, depth_edge_local, {width_local, height_local}, cv::INTER_NEAREST);
 
 #ifdef CUDA_ON
-    auto depths = cuda_renderer::render_cuda(model.tris, mat4_v, width_local, height_local, proj_mat);
+    auto depths = cuda_renderer::render_cuda(device_tris, mat4_v, width_local, height_local, proj_mat);
 #else
     auto depths = cuda_renderer::render_cpu(model.tris, mat4_v, width_local, height_local, proj_mat);
 #endif
@@ -328,7 +336,7 @@ auto PoseRefine::render_what(F f, std::vector<cv::Mat> &init_poses, int down_sam
     for(size_t i=0; i<init_poses.size();i++) mat4_v[i].init_from_cv(init_poses[i]);
 
 #ifdef CUDA_ON
-        auto depths = cuda_renderer::render_cuda_keep_in_gpu(model.tris, mat4_v,
+        auto depths = cuda_renderer::render_cuda_keep_in_gpu(device_tris, mat4_v,
                                                            width_local, height_local, proj_mat);
 
         return f(depths, width_local, height_local, init_poses.size());
@@ -729,5 +737,18 @@ cv::Mat PoseRefine::get_depth_edge(cv::Mat &depth__, cv::Mat K)
 //    cv::bitwise_not(dst, dst);
 //    cv::distanceTransform(dst, dst, CV_DIST_C, 3);  //dilute distance
     return dst;
+}
+
+cv::Mat PoseRefine::view_dep(cv::Mat dep)
+{
+    cv::Mat map = dep;
+    double min;
+    double max;
+    cv::minMaxIdx(map, &min, &max);
+    cv::Mat adjMap;
+    map.convertTo(adjMap,CV_8UC1, 255 / (max-min), -min);
+    cv::Mat falseColorsMap;
+    applyColorMap(adjMap, falseColorsMap, cv::COLORMAP_HOT);
+    return falseColorsMap;
 }
 

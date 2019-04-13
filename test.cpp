@@ -128,7 +128,6 @@ void view_pcd(open3d::PointCloud& model_pcd, open3d::PointCloud& model_pcd2){
     open3d::DrawGeometries({model_pcd_down, model_pcd_down2});
 }
 
-
 cv::Mat view_dep(cv::Mat dep){
     cv::Mat map = dep;
     double min;
@@ -407,7 +406,7 @@ timer.out("ICP_Point2Plane_cuda");
 #endif
 
 // hinterstoisser doumanoglou tejani
-string dataset_prefix = "/home/meiqua/patch_linemod/public/datasets/hinterstoisser/test/03/";
+string dataset_prefix = "/home/meiqua/patch_linemod/public/datasets/hinterstoisser/test/06/";
 
 void depth_edge_test(){
     vector<string> rgb_paths, depth_paths;
@@ -436,8 +435,6 @@ void depth_edge_test(){
 void renderer_interface_test(){
     int width = 640; int height = 480;
 
-    cuda_renderer::Model model(prefix+"obj_06.ply");
-
     Mat K = (Mat_<float>(3,3) << 572.4114, 0.0, 325.2611, 0.0, 573.57043, 242.04899, 0.0, 0.0, 1.0);
     PoseRefine refiner(prefix + "obj_06.ply");
     refiner.set_K_width_height(K, width, height);
@@ -461,11 +458,60 @@ void renderer_interface_test(){
     waitKey(0);
 }
 
+void process_batch_test(){
+    Mat K = (Mat_<float>(3,3) << 572.4114, 0.0, 325.2611, 0.0, 573.57043, 242.04899, 0.0, 0.0, 1.0);
+    PoseRefine refiner(prefix + "obj_06.ply");
+
+    Mat R_ren = (Mat_<float>(3,3) << 0.09630630, 0.99404401, 0.05100790, 0.57332098, -0.01350810, -0.81922001, -0.81365103, 0.10814000, -0.57120699);
+    Mat t_ren = (Mat_<float>(3,1) << -105.35775150, -117.52119142, 1014.87701320);
+
+    Mat init = Mat::eye(4, 4, CV_32F);
+    R_ren.copyTo(init(Rect(0, 0, 3, 3)));
+    t_ren.copyTo(init(Rect(3, 0, 1, 3)));
+
+    vector<string> rgb_paths, depth_paths;
+    for (const auto & p : fs::directory_iterator(dataset_prefix + "rgb/"))
+        rgb_paths.push_back(p.path());
+    for (const auto & p : fs::directory_iterator(dataset_prefix + "depth/"))
+        depth_paths.push_back(p.path());
+
+    std::sort(rgb_paths.begin(), rgb_paths.end());
+    std::sort(depth_paths.begin(), depth_paths.end());
+
+    // from hinter dataset
+    Mat modelK = (cv::Mat_<float>(3,3) << 572.4114, 0.0, 325.2611, 0.0, 573.57043, 242.04899, 0.0, 0.0, 1.0);
+    refiner.set_K(modelK);
+    for(size_t i=0; i<rgb_paths.size(); i++){
+        Mat rgb = imread(rgb_paths[i], CV_LOAD_IMAGE_ANYCOLOR);
+        Mat depth = cv::imread(depth_paths[i], CV_LOAD_IMAGE_ANYCOLOR | CV_LOAD_IMAGE_ANYDEPTH);
+
+        refiner.set_depth(depth);
+        vector<Mat> init_poses(50);
+        for(auto& pose: init_poses){
+            pose = init.clone();
+        }
+
+        vector<Mat> test(1, init);
+        auto masks = refiner.render_mask(test);
+        Mat show;
+        rgb.copyTo(show, masks[0]);
+        cout << rgb_paths[i] << endl;
+        imshow("mask", masks[0]);
+        imshow("rgb", rgb);
+        waitKey(0);
+
+        auto results_unfiltered = refiner.process_batch(init_poses);
+//        auto results = refiner.results_filter(results_unfiltered);
+        cout << "end test" << endl;
+        return;
+    }
+}
+
 int main(int argc, char const *argv[]){
 
 #ifdef CUDA_ON
 //    test_cuda_icp();
 #endif
-    renderer_interface_test();
+    process_batch_test();
     return 0;
 }
