@@ -4,16 +4,12 @@
 #include <experimental/filesystem>
 namespace fs = std::experimental::filesystem;
 
-
-
 using namespace cv;
 using namespace std;
 
-
-
 static std::string prefix = "/home/meiqua/pose_refine/test/";
 
-#define USE_PROJ
+//#define USE_PROJ
 
 #ifdef CUDA_ON
 void test_cuda_icp(){
@@ -338,15 +334,16 @@ void process_batch_test(){
 //        imshow("mask", show);
 ////        imshow("right_mask", show_right);
 //        waitKey(0);
-
-        auto results_unfiltered = refiner.process_batch(init_poses);
+        auto pose_extended = refiner.poses_extend(init_poses);
+        auto results_unfiltered = refiner.process_batch(pose_extended, 2, true);
 
         Mat pose_test(4, 4, CV_32F, &results_unfiltered[0].transformation_);
         vector<Mat> pose_test_v(1, pose_test);
         auto depths2 = refiner.render_depth(pose_test_v);
         auto pcd3 = cuda_icp::depth2cloud_cpu((uint16_t*)depths2[0].data, 640, 480, *reinterpret_cast<::Mat3x3f*>(K.data));
-        helper::view_pcd(pcd1, pcd3);
+//        helper::view_pcd(pcd1, pcd3);
 
+        results_unfiltered.clear();
         auto results = refiner.results_filter(results_unfiltered);
 
         cout << results.size() << endl;

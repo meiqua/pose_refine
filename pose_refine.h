@@ -215,6 +215,7 @@ static cv::Mat eulerAnglesToRotationMatrix(cv::Vec3f theta)
 }
 }
 
+//#define USE_PROJ
 class PoseRefine {
 public:
     cv::Mat scene_depth;
@@ -224,14 +225,28 @@ public:
     cv::Mat K;
     int width, height;
     cuda_renderer::Model model;
-    cuda_renderer::Model::mat4x4 proj_mat;
 #ifdef CUDA_ON
     cuda_renderer::device_vector_holder<cuda_renderer::Model::Triangle> device_tris;
+#endif
+
+    cuda_renderer::Model::mat4x4 proj_mat;
+
+
+#ifdef USE_PROJ
+#ifdef CUDA_ON
     ::device_vector_holder<::Vec3f> pcd_buffer_cuda, normal_buffer_cuda;
 #else
     std::vector<::Vec3f> pcd_buffer, normal_buffer;
 #endif
     Scene_projective scene;
+#else
+#ifdef CUDA_ON
+    KDTree_cuda kdtree;
+#else
+    KDTree_cpu kdtree;
+#endif
+    Scene_nn scene;
+#endif
 
     // render & icp batch size, 8 is better on CPU
 #ifdef CUDA_ON
@@ -253,9 +268,9 @@ public:
                                                             int down_sample = 2, bool depth_aligned = false);
 
     std::vector<cuda_icp::RegistrationResult> results_filter(std::vector<cuda_icp::RegistrationResult>& results,
-                                                            float edge_hit_rate_thresh = 0.7f,
+                                                            float edge_hit_rate_thresh = 0.5f,
                                                             float fitness_thresh = 0.7f,
-                                                            float rmse_thresh = 0.07f);
+                                                            float rmse_thresh = 0.05f);
 
     std::vector<cv::Mat> render_depth(std::vector<cv::Mat>& init_poses, int down_sample = 1);
     std::vector<cv::Mat> render_mask(std::vector<cv::Mat>& init_poses, int down_sample = 1);

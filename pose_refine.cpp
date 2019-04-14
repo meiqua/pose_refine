@@ -98,13 +98,21 @@ void PoseRefine::set_depth(cv::Mat depth)
     height = depth.rows;
     proj_mat = cuda_renderer::compute_proj(K, width, height);
 
-
+#ifdef USE_PROJ
 #ifdef CUDA_ON
     scene.init_Scene_projective_cuda(scene_depth, *reinterpret_cast<Mat3x3f*>(K.data),
                                      pcd_buffer_cuda, normal_buffer_cuda);
 #else
     scene.init_Scene_projective_cpu(scene_depth, *reinterpret_cast<Mat3x3f*>(K.data), pcd_buffer, normal_buffer);
 #endif
+#else
+#ifdef CUDA_ON
+    scene.init_Scene_nn_cuda(scene_depth, *reinterpret_cast<Mat3x3f*>(K.data), kdtree);
+#else
+    scene.init_Scene_nn_cpu(scene_depth, *reinterpret_cast<Mat3x3f*>(K.data), kdtree);
+#endif
+#endif
+
 }
 
 void PoseRefine::set_K(cv::Mat K)
@@ -126,6 +134,29 @@ std::vector<cuda_icp::RegistrationResult> PoseRefine::process_batch(std::vector<
                                                                     int down_sample,
                                                                     bool depth_aligned)
 {
+    const bool debug_ = false;
+    const bool record_ = false;
+    if(debug_){
+        if(record_){
+            cv::FileStorage fs("/home/meiqua/dump_process_batch.yml", cv::FileStorage::WRITE);
+            fs << "init_poses" << "[";
+            for(auto& r: init_poses){
+                fs << r;
+            }
+            fs << "]";
+        }
+        else{
+            cv::FileStorage fs("/home/meiqua/dump_process_batch.yml", cv::FileStorage::READ);
+            cv::FileNode results_fn = fs["init_poses"];
+            init_poses.clear();
+            init_poses.resize(results_fn.size());
+            cv::FileNodeIterator it = results_fn.begin(), it_end = results_fn.end();
+            for (int i_r = 0; it != it_end; ++it, ++i_r){
+                (*it) >> init_poses[i_r];
+            }
+        }
+    }
+
     int init_size = init_poses.size();
     std::vector<cuda_icp::RegistrationResult> result_poses(init_size);
     cuda_icp::ICPConvergenceCriteria criteria;
@@ -143,7 +174,7 @@ std::vector<cuda_icp::RegistrationResult> PoseRefine::process_batch(std::vector<
     float temp_max_diff = scene.max_dist_diff;
     auto setting_for_align = [&](){
         criteria = {1e-5f, 1e-5f, 1};   // just 1 iteration
-        scene.max_dist_diff = FLT_MAX;  // invalidate rejection
+        scene.max_dist_diff = 0.3f;  // loose rejection
     };
     auto setting_backup = [&](){
         criteria = {1e-5f, 1e-5f, 30};
@@ -186,6 +217,9 @@ std::vector<cuda_icp::RegistrationResult> PoseRefine::process_batch(std::vector<
             auto pcd1_cpu = cuda_icp::depth2cloud_cpu(depths.data() + j*width_local*height_local,
                                                         width_local, height_local, K_icp);
 #endif
+//            std::cout << "init: " << i << std::endl;
+//            helper::view_pcd(pcd1_cpu, pcd_buffer);
+
             if(!depth_aligned){
                 setting_for_align();
 #ifdef CUDA_ON
@@ -193,6 +227,10 @@ std::vector<cuda_icp::RegistrationResult> PoseRefine::process_batch(std::vector<
 #else
                 result_poses[j+i] = cuda_icp::ICP_Point2Plane_cpu(pcd1_cpu, scene, criteria);
 #endif
+//                std::cout << "not aligned fitness_: " << result_poses[j+i].fitness_ << std::endl;
+//                std::cout << "not aligned inlier_rmse_: " << result_poses[j+i].inlier_rmse_ << std::endl;
+//                helper::view_pcd(pcd1_cpu, pcd_buffer);
+
                 temp = result_poses[j+i].transformation_ * temp;
             }
 
@@ -202,6 +240,12 @@ std::vector<cuda_icp::RegistrationResult> PoseRefine::process_batch(std::vector<
 #else
             result_poses[j+i] = cuda_icp::ICP_Point2Plane_cpu(pcd1_cpu, scene, criteria);
 #endif
+//            if(result_poses[j+i].fitness_ > 0.7f && !record_){
+//                std::cout << "finally fitness_: " << result_poses[j+i].fitness_ << std::endl;
+//                std::cout << "finally inlier_rmse_: " << result_poses[j+i].inlier_rmse_ << std::endl;
+//                helper::view_pcd(pcd1_cpu, pcd_buffer);
+//            }
+
             temp = result_poses[j+i].transformation_ * temp;
             result_poses[j + i].transformation_ = to_mm(temp);
         }
@@ -226,6 +270,52 @@ std::vector<cuda_icp::RegistrationResult> PoseRefine::process_batch(std::vector<
 std::vector<cuda_icp::RegistrationResult> PoseRefine::results_filter(std::vector<cuda_icp::RegistrationResult> &results,
                                                                      float edge_hit_rate_thresh, float fitness_thresh, float rmse_thresh)
 {
+    const bool debug_ = false;
+    const bool record_ = false;
+    if(debug_){
+        if(record_){
+            cv::FileStorage fs("/home/meiqua/dump.yml", cv::FileStorage::WRITE);
+            fs << "results" << "[";
+            for(auto& r: results){
+                fs<< "{";
+
+                fs << "fitness" << r.fitness_;
+                fs << "inlier_rmse" << r.inlier_rmse_;
+                fs << "transformation" << "[";
+                for(int i=0; i<4; i++){
+                    for(int j=0; j<4; j++){
+                        fs << r.transformation_[i][j];
+                    }
+                }
+                fs << "]";
+                fs << "}";
+            }
+            fs << "]";
+        }
+        else{
+            cv::FileStorage fs("/home/meiqua/dump.yml", cv::FileStorage::READ);
+            cv::FileNode results_fn = fs["results"];
+            results.resize(results_fn.size());
+            cv::FileNodeIterator it = results_fn.begin(), it_end = results_fn.end();
+            for (int i_r = 0; it != it_end; ++it, ++i_r)
+            {
+                results[i_r].fitness_ = (*it)["fitness"];
+                results[i_r].inlier_rmse_ = (*it)["inlier_rmse"];
+
+                cv::FileNode trans_fn = (*it)["transformation"];
+                assert(trans_fn.type() == cv::FileNode::SEQ);
+
+                cv::FileNodeIterator fni = trans_fn.begin();
+                for(int i=0; i<4; i++){
+                    for(int j=0; j<4; j++){
+                        results[i_r].transformation_[i][j] = float(*fni);
+                        fni++;
+                    }
+                }
+            }
+        }
+    }
+
     // first pass, check rmse & fitness
     std::vector<cuda_icp::RegistrationResult> filtered;
     std::vector<cuda_renderer::Model::mat4x4> mat4_v;
@@ -256,7 +346,10 @@ std::vector<cuda_icp::RegistrationResult> PoseRefine::results_filter(std::vector
     const int height_local = height/down_sample;
 
     cv::Mat depth_edge_local;
-    cv::resize(scene_dep_edge, depth_edge_local, {width_local, height_local}, cv::INTER_NEAREST);
+    cv::resize(scene_dep_edge, depth_edge_local, {width_local, height_local}, 0, 0, cv::INTER_NEAREST);
+
+//    cv::imshow("edge", scene_dep_edge);
+//    cv::waitKey(0);
 
 #ifdef CUDA_ON
     auto depths = cuda_renderer::render_cuda(device_tris, mat4_v, width_local, height_local, proj_mat);
@@ -267,19 +360,37 @@ std::vector<cuda_icp::RegistrationResult> PoseRefine::results_filter(std::vector
 #pragma omp declare reduction (merge : std::vector<Result_bbox> : \
     omp_out.insert(omp_out.end(), omp_in.begin(), omp_in.end()))
 
+//    std::vector<cv::Mat> test(mat4_v.size());
+//    for(int i=0; i<mat4_v.size(); i++) {
+//        std::cout << mat4_v[i] << std::endl;
+//        test[i] = cv::Mat(4, 4, CV_32F, &mat4_v[i]);
+//    }
+
+//    auto masks = render_mask(test);
+//    for(auto& m: masks){
+//        cv::imshow("mask", m);
+//        cv::waitKey(0);
+//    }
+
 #pragma omp parallel for reduction(merge: filtered2)
     for(int i=0; i<filtered.size(); i++){
         cv::Mat depth_int(height_local, width_local, CV_32SC1, depths.data() + i*width_local*height_local);
         cv::Mat mask = depth_int > 0;
         cv::Mat mask_erode;
-        cv::erode(mask, mask_erode, cv::Mat());
+        cv::dilate(mask, mask_erode, cv::Mat());
         cv::Mat mask_edge;
         cv::bitwise_xor(mask, mask_erode, mask_edge);
-
         cv::Mat hit_edge;
         cv::bitwise_and(mask_edge, depth_edge_local, hit_edge);
 
-        float hit_rate = float(cv::countNonZero(hit_edge))/cv::countNonZero(mask_edge);
+//        cv::imshow("edge", depth_edge_local);
+//        cv::imshow("test", hit_edge);
+//        cv::waitKey(0);
+
+        int mask_edge_count = cv::countNonZero(mask_edge);
+        if(mask_edge_count==0) continue;
+
+        float hit_rate = float(cv::countNonZero(hit_edge))/mask_edge_count;
         if(hit_rate > edge_hit_rate_thresh){
 
             Result_bbox temp;
@@ -401,6 +512,29 @@ cv::Mat so3_map(cv::Mat rot_vec){
 
 std::vector<cv::Mat> PoseRefine::poses_extend(std::vector<cv::Mat> &init_poses, float degree_var)
 {
+    const bool debug_ = false;
+    const bool record_ = false;
+    if(debug_){
+        if(record_){
+            cv::FileStorage fs("/home/meiqua/dump_poses_extend.yml", cv::FileStorage::WRITE);
+            fs << "init_poses" << "[";
+            for(auto& r: init_poses){
+                fs << r;
+            }
+            fs << "]";
+        }
+        else{
+            cv::FileStorage fs("/home/meiqua/dump_poses_extend.yml", cv::FileStorage::READ);
+            cv::FileNode results_fn = fs["init_poses"];
+            init_poses.clear();
+            init_poses.resize(results_fn.size());
+            cv::FileNodeIterator it = results_fn.begin(), it_end = results_fn.end();
+            for (int i_r = 0; it != it_end; ++it, ++i_r){
+                (*it) >> init_poses[i_r];
+            }
+        }
+    }
+
     assert(init_poses.size() > 0);
     assert(init_poses[0].type() == CV_32F && init_poses[0].rows == 4 && init_poses[0].cols == 4);
 
@@ -413,6 +547,8 @@ std::vector<cv::Mat> PoseRefine::poses_extend(std::vector<cv::Mat> &init_poses, 
             for(int j=-1; j<=1; j++){
                 for(int k=-1; k<=1; k++){
                     auto& extended_cur = extended[pose_iter*27 + shift];
+                    extended_cur = pose.clone();
+                    if(i==0 && j==0 && k==0) continue;
 
                     float vec_data[3] = {
                         i * degree_var,
@@ -422,7 +558,7 @@ std::vector<cv::Mat> PoseRefine::poses_extend(std::vector<cv::Mat> &init_poses, 
                     cv::Mat rot_vec(3, 1, CV_32F, vec_data);
                     cv::Mat delta_R = so3_map(rot_vec);
 
-                    extended_cur = pose.clone();
+
                     cv::Mat R = pose(cv::Rect(0, 0, 3, 3));
                     extended_cur(cv::Rect(0, 0, 3, 3)) = delta_R * R;
 
@@ -739,7 +875,7 @@ cv::Mat PoseRefine::get_depth_edge(cv::Mat &depth__, cv::Mat K)
     cv::Mat dst;
     cv::bitwise_or(high_curvature_edge, occ_edge, dst);
 
-    cv::dilate(dst, dst, cv::Mat::ones(5, 5, CV_8U));
+    cv::dilate(dst, dst, cv::Mat::ones(7, 7, CV_8U));
 
 //    cv::bitwise_not(dst, dst);
 //    cv::distanceTransform(dst, dst, CV_DIST_C, 3);  //dilute distance
