@@ -162,28 +162,27 @@ cuda_renderer::Model::mat4x4 cuda_renderer::compute_proj(const cv::Mat &K, int w
 {
     cuda_renderer::Model::mat4x4 p;
     p.a0 = 2*K.at<float>(0, 0)/width;
-    p.a1 = -2*K.at<float>(0, 1)/width;
-    p.a2 = -2*K.at<float>(0, 2)/width + 1;
+    p.a1 = -2*K.at<float>(0, 1)/width; p.a1 = -p.a1;  // yz flip
+    p.a2 = -2*K.at<float>(0, 2)/width + 1; p.a2 = -p.a2;
     p.a3 = 0;
 
     p.b0 = 0;
-    p.b1 = 2*K.at<float>(1, 1)/height;
-    p.b2 = 2*K.at<float>(1, 2)/width - 1;
+    p.b1 = 2*K.at<float>(1, 1)/height; p.b1 = -p.b1;
+    p.b2 = 2*K.at<float>(1, 2)/height - 1; p.b2 = -p.b2;
     p.b3 = 0;
 
     p.c0 = 0;
     p.c1 = 0;
-    p.c2 = -(far+near)/(far-near);
+    p.c2 = -(far+near)/(far-near); p.c2 = -p.c2;
     p.c3 = -2*far*near/(far-near);
 
     p.d0 = 0;
     p.d1 = 0;
-    p.d2 = -1;
+    p.d2 = -1; p.d2 = -p.d2;
     p.d3 = 0;
 
     return p;
 }
-
 
 // cpu renderer, for test
 
@@ -195,9 +194,14 @@ void rasterization(const Model::Triangle dev_tri, Model::float3 last_row,
     float pts2[3][2];
 
     // viewport transform(0, 0, width, height)
-    pts2[0][0] = dev_tri.v0.x/last_row.x*width/2.0f+width/2.0f; pts2[0][1] = dev_tri.v0.y/last_row.x*height/2.0f+height/2.0f;
-    pts2[1][0] = dev_tri.v1.x/last_row.y*width/2.0f+width/2.0f; pts2[1][1] = dev_tri.v1.y/last_row.y*height/2.0f+height/2.0f;
-    pts2[2][0] = dev_tri.v2.x/last_row.z*width/2.0f+width/2.0f; pts2[2][1] = dev_tri.v2.y/last_row.z*height/2.0f+height/2.0f;
+    pts2[0][0] = dev_tri.v0.x/last_row.x*width/2.0f+width/2.0f;
+    pts2[0][1] = dev_tri.v0.y/last_row.x*height/2.0f+height/2.0f;
+
+    pts2[1][0] = dev_tri.v1.x/last_row.y*width/2.0f+width/2.0f;
+    pts2[1][1] = dev_tri.v1.y/last_row.y*height/2.0f+height/2.0f;
+
+    pts2[2][0] = dev_tri.v2.x/last_row.z*width/2.0f+width/2.0f;
+    pts2[2][1] = dev_tri.v2.y/last_row.z*height/2.0f+height/2.0f;
 
     float bboxmin[2] = {FLT_MAX,  FLT_MAX};
     float bboxmax[2] = {-FLT_MAX, -FLT_MAX};
@@ -207,9 +211,9 @@ void rasterization(const Model::Triangle dev_tri, Model::float3 last_row,
 
     size_t real_width = width;
     if(roi.width > 0 && roi.height > 0){  // depth will be flipped
-        clamp_min[0] = width - (roi.x + roi.width) + 1; // +1 avoid out of roi
-        clamp_min[1] = height - (roi.y + roi.height) + 1;
-        clamp_max[0] = width - roi.x;
+        clamp_min[0] = roi.x;
+        clamp_min[1] = height - (roi.y + roi.height - 1);
+        clamp_max[0] = (roi.x + roi.width) - 1;
         clamp_max[1] = height - roi.y;
         real_width = roi.width;
     }
@@ -233,11 +237,15 @@ void rasterization(const Model::Triangle dev_tri, Model::float3 last_row,
             Model::float3 bc_over_z = {bc_screen.x/last_row.x, bc_screen.y/last_row.y, bc_screen.z/last_row.z};
 
             // refer to https://en.wikibooks.org/wiki/Cg_Programming/Rasterization, Perspectively Correct Interpolation
-            float frag_depth = -(dev_tri.v0.z*bc_over_z.x + dev_tri.v1.z*bc_over_z.y + dev_tri.v2.z*bc_over_z.z)
+//            float frag_depth = (dev_tri.v0.z * bc_over_z.x + dev_tri.v1.z * bc_over_z.y + dev_tri.v2.z * bc_over_z.z)
+//                    /(bc_over_z.x + bc_over_z.y + bc_over_z.z);
+
+            // this seems better
+            float frag_depth = (bc_screen.x + bc_screen.y + bc_screen.z)
                     /(bc_over_z.x + bc_over_z.y + bc_over_z.z);
 
-            size_t x_to_write = (width - P[0] - roi.x);
-            size_t y_to_write = (height - P[1] - roi.y);
+            size_t x_to_write = P[0] + roi.x;
+            size_t y_to_write = height - P[1] - roi.y;
 
             int32_t depth = int32_t(frag_depth/**1000*/ + 0.5f);
             int32_t& depth_to_write = depth_entry[x_to_write+y_to_write*real_width];
@@ -270,11 +278,11 @@ std::vector<int32_t> cuda_renderer::render_cpu(const std::vector<cuda_renderer::
             Model::Triangle local_tri = transform_triangle(tri, pose);
 //            if(normal_functor::is_back(local_tri)) continue;
 
-            // assume last column of projection matrix is  0 0 -1 0
+            // assume last column of projection matrix is  0 0 1 0
             Model::float3 last_row = {
-                -local_tri.v0.z,
-                -local_tri.v1.z,
-                -local_tri.v2.z
+                local_tri.v0.z,
+                local_tri.v1.z,
+                local_tri.v2.z
             };
             // projection transform
             local_tri = transform_triangle(local_tri, proj_mat);

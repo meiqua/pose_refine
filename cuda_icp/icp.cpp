@@ -257,13 +257,13 @@ RegistrationResult ICP_Point2Plane_cpu_global_memory_version(std::vector<Vec3f> 
         result.fitness_ = float(count) / model_pcd.size();
         result.inlier_rmse_ = std::sqrt(total_error / count);
 
-//        {
-//            std::cout << " --- cpu --- " << iter << " --- cpu ---" << std::endl;
-//            std::cout << "total error: " << total_error << std::endl;
-//            std::cout << "result.fitness_: " << result.fitness_ << std::endl;
-//            std::cout << "result.inlier_rmse_: " << result.inlier_rmse_ << std::endl;
-//            std::cout << " --- cpu --- " << iter << " --- cpu ---" << std::endl << std::endl;
-//        }
+        {
+            std::cout << " --- cpu --- " << iter << " --- cpu ---" << std::endl;
+            std::cout << "total error: " << total_error << std::endl;
+            std::cout << "result.fitness_: " << result.fitness_ << std::endl;
+            std::cout << "result.inlier_rmse_: " << result.inlier_rmse_ << std::endl;
+            std::cout << " --- cpu --- " << iter << " --- cpu ---" << std::endl << std::endl;
+        }
 
         // last extra iter, just compute fitness & mse
         if(iter == criteria.max_iteration_) return result;
@@ -276,19 +276,19 @@ RegistrationResult ICP_Point2Plane_cpu_global_memory_version(std::vector<Vec3f> 
         Eigen::Matrix<float, 6, 6> A = A_buffer.transpose()*A_buffer;
         Eigen::Matrix<float, 6, 1> b = A_buffer.transpose()*b_buffer;
 
-//        std::cout << "~~~~~~~~A~~~~~~" << std::endl;
-//        std::cout << A;
-//        std::cout << "\n~~~~~~~~~~~~~~\n" << std::endl;
+        std::cout << "~~~~~~~~A~~~~~~" << std::endl;
+        std::cout << A;
+        std::cout << "\n~~~~~~~~~~~~~~\n" << std::endl;
 
-//        std::cout << "~~~~~~~~b~~~~~~" << std::endl;
-//        std::cout << b;
-//        std::cout << "\n~~~~~~~~~~~~~~\n" << std::endl;
+        std::cout << "~~~~~~~~b~~~~~~" << std::endl;
+        std::cout << b;
+        std::cout << "\n~~~~~~~~~~~~~~\n" << std::endl;
 
         Mat4x4f extrinsic = eigen_slover_666(A.data(), b.data());
 
-//        std::cout << "~~extrinsic~~~~" << std::endl;
-//        std::cout << extrinsic;
-//        std::cout << "\n~~~~~~~~~~~~~~\n" << std::endl;
+        std::cout << "~~extrinsic~~~~" << std::endl;
+        std::cout << extrinsic;
+        std::cout << "\n~~~~~~~~~~~~~~\n" << std::endl;
 
         transform_pcd(model_pcd, extrinsic);
         result.transformation_ = extrinsic * result.transformation_;

@@ -98,11 +98,12 @@ void PoseRefine::set_depth(cv::Mat depth)
     height = depth.rows;
     proj_mat = cuda_renderer::compute_proj(K, width, height);
 
+
 #ifdef CUDA_ON
-    scene.init_Scene_projective_cuda(scene_depth, reinterpret_cast<Mat3x3f&>(K),
+    scene.init_Scene_projective_cuda(scene_depth, *reinterpret_cast<Mat3x3f*>(K.data),
                                      pcd_buffer_cuda, normal_buffer_cuda);
 #else
-    scene.init_Scene_projective_cpu(scene_depth, reinterpret_cast<Mat3x3f&>(K), pcd_buffer, normal_buffer);
+    scene.init_Scene_projective_cpu(scene_depth, *reinterpret_cast<Mat3x3f*>(K.data), pcd_buffer, normal_buffer);
 #endif
 }
 
@@ -151,6 +152,12 @@ std::vector<cuda_icp::RegistrationResult> PoseRefine::process_batch(std::vector<
 
     // icp is m, while init poses & renderer is mm
     auto to_mm = [](Mat4x4f& trans){
+        trans[0][3] *= 1000.0f;
+        trans[1][3] *= 1000.0f;
+        trans[2][3] *= 1000.0f;
+        return trans;
+    };
+    auto to_m = [](Mat4x4f& trans){
         trans[0][3] /= 1000.0f;
         trans[1][3] /= 1000.0f;
         trans[2][3] /= 1000.0f;
@@ -167,10 +174,11 @@ std::vector<cuda_icp::RegistrationResult> PoseRefine::process_batch(std::vector<
                                                            width_local, height_local, proj_mat);
 #endif
         // cuda per thread stream
-# pragma omp parallel num_threads(mat4_v.size())
+#pragma omp parallel num_threads(mat4_v.size())
         {
             int j = omp_get_thread_num();
-            result_poses[j+i].transformation_ = reinterpret_cast<Mat4x4f&>(mat4_v[j]);
+            Mat4x4f temp = to_m(reinterpret_cast<Mat4x4f&>(mat4_v[j]));
+
 #ifdef CUDA_ON
             auto pcd1_cuda = cuda_icp::depth2cloud_cuda(depths.data() + j*width_local*height_local,
                                                         width_local, height_local, K_icp);
@@ -178,26 +186,24 @@ std::vector<cuda_icp::RegistrationResult> PoseRefine::process_batch(std::vector<
             auto pcd1_cpu = cuda_icp::depth2cloud_cpu(depths.data() + j*width_local*height_local,
                                                         width_local, height_local, K_icp);
 #endif
-            Mat4x4f previous_T;
             if(!depth_aligned){
                 setting_for_align();
-                previous_T = result_poses[j+i].transformation_;
 #ifdef CUDA_ON
                 result_poses[j+i] = cuda_icp::ICP_Point2Plane_cuda(pcd1_cuda, scene, criteria);
 #else
                 result_poses[j+i] = cuda_icp::ICP_Point2Plane_cpu(pcd1_cpu, scene, criteria);
 #endif
-                result_poses[j+i].transformation_ = to_mm(result_poses[j+i].transformation_) * previous_T;
+                temp = result_poses[j+i].transformation_ * temp;
             }
 
             setting_backup();
-            previous_T = result_poses[j+i].transformation_;
 #ifdef CUDA_ON
             result_poses[j+i] = cuda_icp::ICP_Point2Plane_cuda(pcd1_cuda, scene, criteria);
 #else
             result_poses[j+i] = cuda_icp::ICP_Point2Plane_cpu(pcd1_cpu, scene, criteria);
 #endif
-            result_poses[j+i].transformation_ = to_mm(result_poses[j+i].transformation_) * previous_T;
+            temp = result_poses[j+i].transformation_ * temp;
+            result_poses[j + i].transformation_ = to_mm(temp);
         }
     };
 
@@ -272,6 +278,7 @@ std::vector<cuda_icp::RegistrationResult> PoseRefine::results_filter(std::vector
 
         cv::Mat hit_edge;
         cv::bitwise_and(mask_edge, depth_edge_local, hit_edge);
+
         float hit_rate = float(cv::countNonZero(hit_edge))/cv::countNonZero(mask_edge);
         if(hit_rate > edge_hit_rate_thresh){
 
@@ -732,7 +739,7 @@ cv::Mat PoseRefine::get_depth_edge(cv::Mat &depth__, cv::Mat K)
     cv::Mat dst;
     cv::bitwise_or(high_curvature_edge, occ_edge, dst);
 
-    cv::dilate(dst, dst, cv::Mat());
+    cv::dilate(dst, dst, cv::Mat::ones(5, 5, CV_8U));
 
 //    cv::bitwise_not(dst, dst);
 //    cv::distanceTransform(dst, dst, CV_DIST_C, 3);  //dilute distance

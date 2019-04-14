@@ -84,6 +84,15 @@ public:
             temp = c3; c3=d2; d2=temp;
         }
 
+        friend std::ostream& operator<<(std::ostream& os, const mat4x4& dt)
+        {
+            os << dt.a0 << '\t' << dt.a1 << '\t' << dt.a2 << '\t' << dt.a3 << std::endl;
+            os << dt.b0 << '\t' << dt.b1 << '\t' << dt.b2 << '\t' << dt.b3 << std::endl;
+            os << dt.c0 << '\t' << dt.c1 << '\t' << dt.c2 << '\t' << dt.c3 << std::endl;
+            os << dt.d0 << '\t' << dt.d1 << '\t' << dt.d2 << '\t' << dt.d3 << std::endl;
+            return os;
+        }
+
         void init_from_cv(const cv::Mat& pose){ // so stupid
             assert(pose.type() == CV_32F);
 
