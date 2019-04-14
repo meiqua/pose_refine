@@ -1,12 +1,10 @@
 #include "depth_scene.h"
 
 void Scene_projective::init_Scene_projective_cpu(cv::Mat& scene_depth, Mat3x3f& scene_K,
-                               std::vector<Vec3f>& pcd_buffer, std::vector<Vec3f>& normal_buffer,
-                              size_t width_, size_t height_, float max_dist_diff_){
+                               std::vector<Vec3f>& pcd_buffer, std::vector<Vec3f>& normal_buffer){
         K = scene_K;
-        width = width_;
-        height = height_;
-        max_dist_diff = max_dist_diff_;
+        width = scene_depth.cols;
+        height = scene_depth.rows;
 
         int depth_type = scene_depth.type();
         assert(depth_type == CV_16U || depth_type == CV_32S);
