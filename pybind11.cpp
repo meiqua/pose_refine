@@ -37,11 +37,10 @@ PYBIND11_MODULE(pose_refine_pybind, m) {
             .def("render_depth", &PoseRefine::render_depth, py::arg("init_poses"), py::arg("down_sample") = 1)
             .def("render_mask", &PoseRefine::render_mask, py::arg("init_poses"), py::arg("down_sample") = 1)
             .def("render_depth_mask", &PoseRefine::render_depth_mask, py::arg("init_poses"), py::arg("down_sample") = 1)
-            .def("process_batch", &PoseRefine::process_batch, py::arg("init_poses"),
-                  py::arg("down_sample") = 2, py::arg("depth_aligned") = false)
+            .def("process_batch", &PoseRefine::process_batch, py::arg("init_poses"),py::arg("down_sample") = 2)
             .def("poses_extend", &PoseRefine::poses_extend, py::arg("init_poses"),
                   py::arg("degree_var") = CV_PI/10)
             .def("results_filter", &PoseRefine::results_filter, py::arg("results"),
                   py::arg("edge_hit_rate_thresh") = 0.5f, py::arg("fitness_thresh") = 0.7f,
-                  py::arg("rmse_thresh") = 0.05f);
+                  py::arg("rmse_thresh") = 0.005f);
 }

@@ -47,10 +47,15 @@ public:
 // no matter it's projective or NN
 class Scene_nn{
 public:
-    float max_dist_diff = 0.02f; // m
+    float max_dist_diff = 0.01f; // m
+    float first_dist_diff = 0.2f;
+    bool is_first = false;
     Vec3f* pcd_ptr;  // will be passed to kernel in cuda, so just hold pointers
     Vec3f* normal_ptr;
     Node_kdtree* node_ptr;
+
+    void set_first(){is_first = true;}
+    void reset_first(){is_first = false;}
 
     void init_Scene_nn_cpu(cv::Mat& scene_depth, Mat3x3f& scene_K, KDTree_cpu& kdtree);
 
@@ -125,7 +130,7 @@ public:
              }
         }
 
-        if(cloest_dist_sq < pow2(max_dist_diff)){
+        if(cloest_dist_sq < pow2(is_first? first_dist_diff: max_dist_diff)){
             valid = true;
             dst_pcd = pcd_ptr[result_idx];
             dst_normal = normal_ptr[result_idx];

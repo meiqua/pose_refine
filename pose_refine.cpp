@@ -131,8 +131,7 @@ void PoseRefine::set_K_width_height(cv::Mat K, int width, int height)
 }
 
 std::vector<cuda_icp::RegistrationResult> PoseRefine::process_batch(std::vector<cv::Mat>& init_poses,
-                                                                    int down_sample,
-                                                                    bool depth_aligned)
+                                                                    int down_sample)
 {
     const bool debug_ = false;
     const bool record_ = false;
@@ -170,16 +169,6 @@ std::vector<cuda_icp::RegistrationResult> PoseRefine::process_batch(std::vector<
     K_icp[0][2] /= down_sample; K_icp[1][2] /= down_sample;
 
     std::vector<cuda_renderer::Model::mat4x4> mat4_v(batch_size);
-
-    float temp_max_diff = scene.max_dist_diff;
-    auto setting_for_align = [&](){
-        criteria = {1e-5f, 1e-5f, 1};   // just 1 iteration
-        scene.max_dist_diff = 0.3f;  // loose rejection
-    };
-    auto setting_backup = [&](){
-        criteria = {1e-5f, 1e-5f, 30};
-        scene.max_dist_diff = temp_max_diff;
-    };
 
     // icp is m, while init poses & renderer is mm
     auto to_mm = [](Mat4x4f& trans){
@@ -220,21 +209,6 @@ std::vector<cuda_icp::RegistrationResult> PoseRefine::process_batch(std::vector<
 //            std::cout << "init: " << i << std::endl;
 //            helper::view_pcd(pcd1_cpu, pcd_buffer);
 
-            if(!depth_aligned){
-                setting_for_align();
-#ifdef CUDA_ON
-                result_poses[j+i] = cuda_icp::ICP_Point2Plane_cuda(pcd1_cuda, scene, criteria);
-#else
-                result_poses[j+i] = cuda_icp::ICP_Point2Plane_cpu(pcd1_cpu, scene, criteria);
-#endif
-//                std::cout << "not aligned fitness_: " << result_poses[j+i].fitness_ << std::endl;
-//                std::cout << "not aligned inlier_rmse_: " << result_poses[j+i].inlier_rmse_ << std::endl;
-//                helper::view_pcd(pcd1_cpu, pcd_buffer);
-
-                temp = result_poses[j+i].transformation_ * temp;
-            }
-
-            setting_backup();
 #ifdef CUDA_ON
             result_poses[j+i] = cuda_icp::ICP_Point2Plane_cuda(pcd1_cuda, scene, criteria);
 #else
@@ -400,7 +374,7 @@ std::vector<cuda_icp::RegistrationResult> PoseRefine::results_filter(std::vector
             cv::findNonZero(mask_edge, Points);  // faster than mask
             temp.bbox = boundingRect(Points);
 
-            temp.score = 1/(filtered[i].inlier_rmse_ + 0.01f);
+            temp.score =  1/(10 * filtered[i].inlier_rmse_);
 
             filtered2.push_back(temp);
         }
@@ -548,7 +522,7 @@ std::vector<cv::Mat> PoseRefine::poses_extend(std::vector<cv::Mat> &init_poses, 
                 for(int k=-1; k<=1; k++){
                     auto& extended_cur = extended[pose_iter*27 + shift];
                     extended_cur = pose.clone();
-                    if(i==0 && j==0 && k==0) continue;
+                    if(i==0 && j==0 && k==0){shift++; continue;}
 
                     float vec_data[3] = {
                         i * degree_var,

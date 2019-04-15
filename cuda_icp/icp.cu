@@ -154,7 +154,7 @@ __global__ void transform_pcd_cuda(Vec3f* model_pcd_ptr, uint32_t model_pcd_size
 
 
 template<class Scene>
-RegistrationResult ICP_Point2Plane_cuda(device_vector_holder<Vec3f> &model_pcd, const Scene scene,
+RegistrationResult ICP_Point2Plane_cuda(device_vector_holder<Vec3f> &model_pcd, Scene scene,
                                         const ICPConvergenceCriteria criteria){
     RegistrationResult result;
     RegistrationResult backup;
@@ -166,6 +166,9 @@ RegistrationResult ICP_Point2Plane_cuda(device_vector_holder<Vec3f> &model_pcd, 
     const uint32_t numBlocks = (model_pcd.size() + threadsPerBlock - 1)/threadsPerBlock;
 
     for(uint32_t iter=0; iter<= criteria.max_iteration_; iter++){
+
+        if(iter==0) scene.set_first();
+        else scene.reset_first();
 
         Vec29f Ab_tight = thrust::transform_reduce(thrust::cuda::par.on(cudaStreamPerThread),
                                         model_pcd.begin_thr(), model_pcd.end_thr(), thrust__pcd2Ab<Scene>(scene),
@@ -216,11 +219,9 @@ RegistrationResult ICP_Point2Plane_cuda(device_vector_holder<Vec3f> &model_pcd, 
     return result;
 }
 
-template RegistrationResult ICP_Point2Plane_cuda(device_vector_holder<Vec3f>&,
-const Scene_projective, const ICPConvergenceCriteria);
+template RegistrationResult ICP_Point2Plane_cuda(device_vector_holder<Vec3f>&, Scene_projective, const ICPConvergenceCriteria);
 
-template RegistrationResult ICP_Point2Plane_cuda(device_vector_holder<Vec3f>&,
-const Scene_nn, const ICPConvergenceCriteria);
+template RegistrationResult ICP_Point2Plane_cuda(device_vector_holder<Vec3f>&, Scene_nn, const ICPConvergenceCriteria);
 
 
 
@@ -349,7 +350,7 @@ __global__ void get_Ab(const Scene scene, Vec3f* model_pcd_ptr, uint32_t model_p
 }
 
 template<class Scene>
-RegistrationResult ICP_Point2Plane_cuda_global_memory_version(device_vector_holder<Vec3f> &model_pcd, const Scene scene,
+RegistrationResult ICP_Point2Plane_cuda_global_memory_version(device_vector_holder<Vec3f> &model_pcd, Scene scene,
                                         const ICPConvergenceCriteria criteria)
 {
     // buffer can make pcd handling indenpendent
@@ -523,10 +524,10 @@ RegistrationResult ICP_Point2Plane_cuda_global_memory_version(device_vector_hold
 }
 
 template RegistrationResult ICP_Point2Plane_cuda_global_memory_version(device_vector_holder<Vec3f>&,
-const Scene_projective, const ICPConvergenceCriteria);
+Scene_projective, const ICPConvergenceCriteria);
 
 template RegistrationResult ICP_Point2Plane_cuda_global_memory_version(device_vector_holder<Vec3f>&,
-const Scene_nn, const ICPConvergenceCriteria);
+Scene_nn, const ICPConvergenceCriteria);
 
 
 }

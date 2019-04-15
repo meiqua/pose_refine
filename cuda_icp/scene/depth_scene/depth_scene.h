@@ -6,10 +6,15 @@
 // no matter it's projective or NN
 struct Scene_projective{
     size_t width = 640, height = 480;
-    float max_dist_diff = 0.02f; // m
+    float max_dist_diff = 0.005f; // m
+    float first_dist_diff = 0.2f;
+    bool is_first = false;
     Mat3x3f K;
     Vec3f* pcd_ptr;  // pointer can unify cpu & cuda version
     Vec3f* normal_ptr;  // layout: 1d, width*height length, array of Vec3f
+
+    void set_first(){is_first = true;}
+    void reset_first(){is_first = false;}
 
     // buffer provided by user, this class only holds pointers,
     // becuase we will pass them to device.
@@ -34,7 +39,7 @@ struct Scene_projective{
         size_t idx = x_y_dep.x + x_y_dep.y * width;
         dst_pcd = pcd_ptr[idx];
 
-        if(dst_pcd.z <= 0 || std__abs(src_pcd.z - dst_pcd.z) > max_dist_diff){
+        if(dst_pcd.z <= 0 || std__abs(src_pcd.z - dst_pcd.z) > (is_first? first_dist_diff: max_dist_diff)){
             // better to search neibor?
 
             valid = false;

@@ -61,12 +61,12 @@ extern template std::vector<Vec3f> depth2cloud_cpu(uint16_t* depth, uint32_t wid
 
 template <class Scene>
 RegistrationResult ICP_Point2Plane_cpu(std::vector<Vec3f>& model_pcd,
-        const Scene scene,
+        Scene scene,
         const ICPConvergenceCriteria criteria = ICPConvergenceCriteria());
 
-extern template RegistrationResult ICP_Point2Plane_cpu(std::vector<Vec3f> &model_pcd, const Scene_projective scene,
+extern template RegistrationResult ICP_Point2Plane_cpu(std::vector<Vec3f> &model_pcd, Scene_projective scene,
 const ICPConvergenceCriteria criteria);
-extern template RegistrationResult ICP_Point2Plane_cpu(std::vector<Vec3f> &model_pcd, const Scene_nn scene,
+extern template RegistrationResult ICP_Point2Plane_cpu(std::vector<Vec3f> &model_pcd, Scene_nn scene,
 const ICPConvergenceCriteria criteria);
 
 #ifdef CUDA_ON
@@ -83,13 +83,13 @@ extern template device_vector_holder<Vec3f> depth2cloud_cuda(int32_t *depth, uin
 
 
 template<class Scene>
-RegistrationResult ICP_Point2Plane_cuda(device_vector_holder<Vec3f> &model_pcd, const Scene scene,
+RegistrationResult ICP_Point2Plane_cuda(device_vector_holder<Vec3f> &model_pcd, Scene scene,
                                         const ICPConvergenceCriteria criteria = ICPConvergenceCriteria());
 
 extern template RegistrationResult ICP_Point2Plane_cuda(device_vector_holder<Vec3f>&,
-const Scene_projective, const ICPConvergenceCriteria);
+Scene_projective, const ICPConvergenceCriteria);
 extern template RegistrationResult ICP_Point2Plane_cuda(device_vector_holder<Vec3f>&,
-const Scene_nn, const ICPConvergenceCriteria);
+Scene_nn, const ICPConvergenceCriteria);
 #endif
 
 
@@ -119,7 +119,10 @@ struct thrust__pcd2Ab
             float b_temp = (dst_pcd - src_pcd).x * dst_normal.x +
                           (dst_pcd - src_pcd).y * dst_normal.y +
                           (dst_pcd - src_pcd).z * dst_normal.z;
-            result[27] = b_temp*b_temp; // mse
+
+            // according to https://github.com/intel-isl/Open3D/issues/874#issuecomment-476747366
+            // this is better than pow2(t_temp)
+            result[27] = pow2((dst_pcd - src_pcd).x) + pow2((dst_pcd - src_pcd).y) + pow2((dst_pcd - src_pcd).z); // mse
 
             // cross
             float A_temp[6];
@@ -189,23 +192,23 @@ struct thrust__plus{
 // just for test and comparation
 template <class Scene>
 RegistrationResult ICP_Point2Plane_cuda_global_memory_version(device_vector_holder<Vec3f>& model_pcd,
-        const Scene scene,
+        Scene scene,
         const ICPConvergenceCriteria criteria = ICPConvergenceCriteria());
 
 extern template RegistrationResult ICP_Point2Plane_cuda_global_memory_version(device_vector_holder<Vec3f>&,
-const Scene_projective, const ICPConvergenceCriteria);
+Scene_projective, const ICPConvergenceCriteria);
 extern template RegistrationResult ICP_Point2Plane_cuda_global_memory_version(device_vector_holder<Vec3f>&,
-const Scene_nn, const ICPConvergenceCriteria);
+Scene_nn, const ICPConvergenceCriteria);
 #endif
 
 template <class Scene>
 RegistrationResult ICP_Point2Plane_cpu_global_memory_version(std::vector<Vec3f>& model_pcd,
-        const Scene scene,
+        Scene scene,
         const ICPConvergenceCriteria criteria = ICPConvergenceCriteria());
 
-extern template RegistrationResult ICP_Point2Plane_cpu_global_memory_version(std::vector<Vec3f> &model_pcd, const Scene_projective scene,
+extern template RegistrationResult ICP_Point2Plane_cpu_global_memory_version(std::vector<Vec3f> &model_pcd, Scene_projective scene,
 const ICPConvergenceCriteria criteria);
-extern template RegistrationResult ICP_Point2Plane_cpu_global_memory_version(std::vector<Vec3f> &model_pcd, const Scene_nn scene,
+extern template RegistrationResult ICP_Point2Plane_cpu_global_memory_version(std::vector<Vec3f> &model_pcd, Scene_nn scene,
 const ICPConvergenceCriteria criteria);
 }
 

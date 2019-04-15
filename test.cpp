@@ -335,7 +335,7 @@ void process_batch_test(){
 ////        imshow("right_mask", show_right);
 //        waitKey(0);
         auto pose_extended = refiner.poses_extend(init_poses);
-        auto results_unfiltered = refiner.process_batch(pose_extended, 2, true);
+        auto results_unfiltered = refiner.process_batch(pose_extended);
 
         Mat pose_test(4, 4, CV_32F, &results_unfiltered[0].transformation_);
         vector<Mat> pose_test_v(1, pose_test);

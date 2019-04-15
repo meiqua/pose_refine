@@ -215,7 +215,7 @@ static cv::Mat eulerAnglesToRotationMatrix(cv::Vec3f theta)
 }
 }
 
-//#define USE_PROJ
+#define USE_PROJ
 class PoseRefine {
 public:
     cv::Mat scene_depth;
@@ -250,7 +250,7 @@ public:
 
     // render & icp batch size, 8 is better on CPU
 #ifdef CUDA_ON
-    int batch_size = 100;
+    int batch_size = 128;
 #else
     int batch_size = 8;
 #endif
@@ -265,19 +265,19 @@ public:
     std::vector<cv::Mat> poses_extend(std::vector<cv::Mat>& init_poses, float degree_var = CV_PI/10);
 
     std::vector<cuda_icp::RegistrationResult> process_batch(std::vector<cv::Mat>& init_poses,
-                                                            int down_sample = 2, bool depth_aligned = false);
+                                                            int down_sample = 2);
 
     std::vector<cuda_icp::RegistrationResult> results_filter(std::vector<cuda_icp::RegistrationResult>& results,
                                                             float edge_hit_rate_thresh = 0.5f,
                                                             float fitness_thresh = 0.7f,
-                                                            float rmse_thresh = 0.05f);
+                                                            float rmse_thresh = 0.005f);
 
     std::vector<cv::Mat> render_depth(std::vector<cv::Mat>& init_poses, int down_sample = 1);
     std::vector<cv::Mat> render_mask(std::vector<cv::Mat>& init_poses, int down_sample = 1);
     std::vector<std::vector<cv::Mat>> render_depth_mask(std::vector<cv::Mat>& init_poses, int down_sample = 1);
 
     template<typename F>
-    auto render_what(F f, std::vector<cv::Mat>& init_poses, int down_sample = 2);
+    auto render_what(F f, std::vector<cv::Mat>& init_poses, int down_sample = 1);
 
     static cv::Mat get_normal(cv::Mat& depth, cv::Mat K = cv::Mat());
     static cv::Mat get_depth_edge(cv::Mat& depth, cv::Mat K = cv::Mat());

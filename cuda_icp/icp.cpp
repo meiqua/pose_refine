@@ -114,7 +114,7 @@ template std::vector<Vec3f> depth2cloud_cpu(uint16_t* depth, uint32_t width, uin
 
 
 template<class Scene>
-RegistrationResult ICP_Point2Plane_cpu(std::vector<Vec3f> &model_pcd, const Scene scene,
+RegistrationResult ICP_Point2Plane_cpu(std::vector<Vec3f> &model_pcd, Scene scene,
                                        const ICPConvergenceCriteria criteria)
 {
     RegistrationResult result;
@@ -126,6 +126,9 @@ RegistrationResult ICP_Point2Plane_cpu(std::vector<Vec3f> &model_pcd, const Scen
 
     // use one extra turn
     for(uint32_t iter=0; iter<=criteria.max_iteration_; iter++){
+
+        if(iter==0) scene.set_first();
+        else scene.reset_first();
 
         Vec29f reducer;
 
@@ -178,16 +181,16 @@ RegistrationResult ICP_Point2Plane_cpu(std::vector<Vec3f> &model_pcd, const Scen
     return result;
 }
 
-template RegistrationResult ICP_Point2Plane_cpu(std::vector<Vec3f> &model_pcd, const Scene_projective scene,
+template RegistrationResult ICP_Point2Plane_cpu(std::vector<Vec3f> &model_pcd, Scene_projective scene,
 const ICPConvergenceCriteria criteria);
-template RegistrationResult ICP_Point2Plane_cpu(std::vector<Vec3f> &model_pcd, const Scene_nn scene,
+template RegistrationResult ICP_Point2Plane_cpu(std::vector<Vec3f> &model_pcd, Scene_nn scene,
 const ICPConvergenceCriteria criteria);
 
 
 /// !!!!!!!!!!!!!!!!!!!!! legacy
 // just for test and comparation
 template<class Scene>
-RegistrationResult ICP_Point2Plane_cpu_global_memory_version(std::vector<Vec3f> &model_pcd, const Scene scene,
+RegistrationResult ICP_Point2Plane_cpu_global_memory_version(std::vector<Vec3f> &model_pcd, Scene scene,
                                        const ICPConvergenceCriteria criteria)
 {
     RegistrationResult result;
@@ -298,9 +301,9 @@ RegistrationResult ICP_Point2Plane_cpu_global_memory_version(std::vector<Vec3f> 
     return result;
 }
 
-template RegistrationResult ICP_Point2Plane_cpu_global_memory_version(std::vector<Vec3f> &model_pcd, const Scene_projective scene,
+template RegistrationResult ICP_Point2Plane_cpu_global_memory_version(std::vector<Vec3f> &model_pcd, Scene_projective scene,
 const ICPConvergenceCriteria criteria);
-template RegistrationResult ICP_Point2Plane_cpu_global_memory_version(std::vector<Vec3f> &model_pcd, const Scene_nn scene,
+template RegistrationResult ICP_Point2Plane_cpu_global_memory_version(std::vector<Vec3f> &model_pcd, Scene_nn scene,
 const ICPConvergenceCriteria criteria);
 }
 
