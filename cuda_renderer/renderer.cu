@@ -99,9 +99,9 @@ void rasterization(const Model::Triangle dev_tri, Model::float3 last_row,
 
     size_t real_width = width;
     if(roi.width > 0 && roi.height > 0){  // depth will be flipped
-        clamp_min[0] = width - (roi.x + roi.width) + 1; // +1 avoid out of roi
-        clamp_min[1] = height - (roi.y + roi.height) + 1;
-        clamp_max[0] = width - roi.x;
+        clamp_min[0] = roi.x;
+        clamp_min[1] = height - (roi.y + roi.height - 1);
+        clamp_max[0] = (roi.x + roi.width) - 1;
         clamp_max[1] = height - roi.y;
         real_width = roi.width;
     }
@@ -125,10 +125,14 @@ void rasterization(const Model::Triangle dev_tri, Model::float3 last_row,
             Model::float3 bc_over_z = {bc_screen.x/last_row.x, bc_screen.y/last_row.y, bc_screen.z/last_row.z};
 
             // refer to https://en.wikibooks.org/wiki/Cg_Programming/Rasterization, Perspectively Correct Interpolation
-            float frag_depth = -(dev_tri.v0.z*bc_over_z.x + dev_tri.v1.z*bc_over_z.y + dev_tri.v2.z*bc_over_z.z)
+//            float frag_depth = (dev_tri.v0.z * bc_over_z.x + dev_tri.v1.z * bc_over_z.y + dev_tri.v2.z * bc_over_z.z)
+//                    /(bc_over_z.x + bc_over_z.y + bc_over_z.z);
+
+            // this seems better
+            float frag_depth = (bc_screen.x + bc_screen.y + bc_screen.z)
                     /(bc_over_z.x + bc_over_z.y + bc_over_z.z);
 
-            size_t x_to_write = (width - P[0] - roi.x);
+            size_t x_to_write = (P[0] + roi.x);
             size_t y_to_write = (height - P[1] - roi.y);
 
             int32_t depth = int32_t(frag_depth/**1000*/ + 0.5f);
@@ -164,11 +168,11 @@ __global__ void render_triangle(Model::Triangle* device_tris_ptr, size_t device_
     Model::Triangle local_tri = transform_triangle(*tri_entry, *pose_entry);
 //    if(normal_functor::is_back(local_tri)) return; //back face culling, need to be disable for not well defined surfaces?
 
-    // assume last column of projection matrix is  0 0 -1 0
+    // assume last column of projection matrix is  0 0 1 0
     Model::float3 last_row = {
-        -local_tri.v0.z,
-        -local_tri.v1.z,
-        -local_tri.v2.z
+        local_tri.v0.z,
+        local_tri.v1.z,
+        local_tri.v2.z
     };
     // projection transform
     local_tri = transform_triangle(local_tri, proj_mat);

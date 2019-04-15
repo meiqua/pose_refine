@@ -121,6 +121,10 @@ struct thrust__pcd2Ab
                           (dst_pcd - src_pcd).z * dst_normal.z;
             result[27] = b_temp*b_temp; // mse
 
+            // according to https://github.com/intel-isl/Open3D/issues/874#issuecomment-476747366
+            // this is better
+//            result[27] = pow2((dst_pcd - src_pcd).x) + pow2((dst_pcd - src_pcd).y) + pow2((dst_pcd - src_pcd).z); // mse
+
             // cross
             float A_temp[6];
             A_temp[0] = dst_normal.z*src_pcd.y - dst_normal.y*src_pcd.z;
