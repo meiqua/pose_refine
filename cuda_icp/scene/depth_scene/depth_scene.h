@@ -6,7 +6,7 @@
 // no matter it's projective or NN
 struct Scene_projective{
     size_t width = 640, height = 480;
-    float max_dist_diff = 0.005f; // m
+    float max_dist_diff = 0.01f; // m
     float first_dist_diff = 0.2f;
     bool is_first = false;
     Mat3x3f K;
