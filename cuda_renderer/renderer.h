@@ -24,8 +24,6 @@
 #include <iostream>
 namespace cuda_renderer {
 
-
-
 class Model{
 public:
     Model();

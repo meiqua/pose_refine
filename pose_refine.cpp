@@ -80,7 +80,7 @@ PoseRefine::PoseRefine(std::string model_path, cv::Mat depth, cv::Mat K):
     #ifdef CUDA_ON
         tris(model.tris.size()),
     #else
-        tris = model.tris,
+        tris(model.tris),
     #endif
     model(model_path)  // model inits first
 {
@@ -94,6 +94,8 @@ PoseRefine::PoseRefine(std::string model_path, cv::Mat depth, cv::Mat K):
 void PoseRefine::set_depth(cv::Mat depth)
 {
     assert(depth.type() == CV_16U && K.type() == CV_32F);
+
+    cv::medianBlur(depth, depth, 5);
     scene_depth = depth;
     scene_dep_edge = get_depth_edge(depth, K);
     width = depth.cols;
