@@ -167,7 +167,7 @@ RegistrationResult ICP_Point2Plane_cuda(device_vector_holder<Vec3f> &model_pcd, 
 
     for(uint32_t iter=0; iter<= criteria.max_iteration_; iter++){
 
-        if(iter==0) scene.set_first();
+        if(iter==0 && scene.use_first) scene.set_first();
         else scene.reset_first();
 
         Vec29f Ab_tight = thrust::transform_reduce(thrust::cuda::par.on(cudaStreamPerThread),

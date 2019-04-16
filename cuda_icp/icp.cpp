@@ -127,7 +127,7 @@ RegistrationResult ICP_Point2Plane_cpu(std::vector<Vec3f> &model_pcd, Scene scen
     // use one extra turn
     for(uint32_t iter=0; iter<=criteria.max_iteration_; iter++){
 
-        if(iter==0) scene.set_first();
+        if(iter==0 && scene.use_first) scene.set_first();
         else scene.reset_first();
 
         Vec29f reducer;

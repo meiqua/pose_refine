@@ -24,6 +24,8 @@
 #include <iostream>
 namespace cuda_renderer {
 
+
+
 class Model{
 public:
     Model();
@@ -154,7 +156,6 @@ public:
     void get_bounding_box(aiVector3D& min, aiVector3D& max) const;
 };
 
-
 #ifdef CUDA_ON
 // thrust device vector can't be used in cpp by design
 // same codes in cuda renderer,
@@ -185,6 +186,12 @@ public:
 
 extern template class device_vector_holder<int>;
 extern template class device_vector_holder<Model::Triangle>;
+#endif
+
+#ifdef CUDA_ON
+    using Int_holder = device_vector_holder<int>;
+#else
+    using Int_holder = std::vector<int>;
 #endif
 
 std::vector<Model::mat4x4> mat_to_compact_4x4(const std::vector<cv::Mat>& poses);
@@ -221,6 +228,26 @@ std::vector<cv::Mat> raw2depth_uint16_cuda(device_vector_holder<int>& raw_data, 
 std::vector<cv::Mat> raw2mask_uint8_cuda(device_vector_holder<int>& raw_data, size_t width, size_t height, size_t pose_size);
 std::vector<std::vector<cv::Mat>> raw2depth_mask_cuda(device_vector_holder<int32_t>& raw_data, size_t width, size_t height, size_t pose_size);
 #endif
+
+template<typename ...Params>
+Int_holder render(Params&&...params)
+{
+#ifdef CUDA_ON
+    return cuda_renderer::render_cuda_keep_in_gpu(std::forward<Params>(params)...);
+#else
+    return cuda_renderer::render_cpu(std::forward<Params>(params)...);
+#endif
+}
+
+template<typename ...Params>
+std::vector<int32_t> render_host(Params&&...params)
+{
+#ifdef CUDA_ON
+    return cuda_renderer::render_cuda(std::forward<Params>(params)...);
+#else
+    return cuda_renderer::render_cpu(std::forward<Params>(params)...);
+#endif
+}
 
 //low_level
 namespace normal_functor{  // similar to thrust

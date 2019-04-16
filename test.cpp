@@ -20,8 +20,8 @@ void test_cuda_icp(){
 
         // cublas also need
 //        cublasStatus_t stat;  // CUBLAS functions status
-        cublasHandle_t cublas_handle;  // CUBLAS context
-        /*stat = */cublasCreate(&cublas_handle);
+//        cublasHandle_t cublas_handle;  // CUBLAS context
+//        /*stat = */cublasCreate(&cublas_handle);
     }
 
     int width = 640; int height = 480;
@@ -355,8 +355,8 @@ void process_batch_test(){
 int main(int argc, char const *argv[]){
 
 #ifdef CUDA_ON
-//    test_cuda_icp();
+    test_cuda_icp();
 #endif
-    process_batch_test();
+//    process_batch_test();
     return 0;
 }

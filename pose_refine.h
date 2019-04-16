@@ -215,7 +215,7 @@ static cv::Mat eulerAnglesToRotationMatrix(cv::Vec3f theta)
 }
 }
 
-#define USE_PROJ
+//#define USE_PROJ
 class PoseRefine {
 public:
     cv::Mat scene_depth;
@@ -226,34 +226,31 @@ public:
     int width, height;
     cuda_renderer::Model model;
 #ifdef CUDA_ON
-    cuda_renderer::device_vector_holder<cuda_renderer::Model::Triangle> device_tris;
+    cuda_renderer::device_vector_holder<cuda_renderer::Model::Triangle> tris;
+#else
+    std::vector<cuda_renderer::Model::Triangle>& tris;
 #endif
 
     cuda_renderer::Model::mat4x4 proj_mat;
 
 
 #ifdef USE_PROJ
-#ifdef CUDA_ON
-    ::device_vector_holder<::Vec3f> pcd_buffer_cuda, normal_buffer_cuda;
-#else
-    std::vector<::Vec3f> pcd_buffer, normal_buffer;
-#endif
+    #ifdef CUDA_ON
+        ::device_vector_holder<::Vec3f> pcd_buffer, normal_buffer;
+    #else
+        std::vector<::Vec3f> pcd_buffer, normal_buffer;
+    #endif
     Scene_projective scene;
 #else
-#ifdef CUDA_ON
-    KDTree_cuda kdtree;
-#else
-    KDTree_cpu kdtree;
-#endif
+    #ifdef CUDA_ON
+        KDTree_cuda kdtree;
+    #else
+        KDTree_cpu kdtree;
+    #endif
     Scene_nn scene;
 #endif
 
-    // render & icp batch size, 8 is better on CPU
-#ifdef CUDA_ON
-    int batch_size = 128;
-#else
     int batch_size = 8;
-#endif
 
     PoseRefine(std::string model_path, cv::Mat depth=cv::Mat(), cv::Mat K=cv::Mat());
     void set_depth(cv::Mat depth);
@@ -270,7 +267,7 @@ public:
     std::vector<cuda_icp::RegistrationResult> results_filter(std::vector<cuda_icp::RegistrationResult>& results,
                                                             float edge_hit_rate_thresh = 0.5f,
                                                             float fitness_thresh = 0.7f,
-                                                            float rmse_thresh = 0.005f);
+                                                            float rmse_thresh = 0.01f);
 
     std::vector<cv::Mat> render_depth(std::vector<cv::Mat>& init_poses, int down_sample = 1);
     std::vector<cv::Mat> render_mask(std::vector<cv::Mat>& init_poses, int down_sample = 1);

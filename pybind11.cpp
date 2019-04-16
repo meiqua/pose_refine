@@ -42,5 +42,5 @@ PYBIND11_MODULE(pose_refine_pybind, m) {
                   py::arg("degree_var") = CV_PI/10)
             .def("results_filter", &PoseRefine::results_filter, py::arg("results"),
                   py::arg("edge_hit_rate_thresh") = 0.5f, py::arg("fitness_thresh") = 0.7f,
-                  py::arg("rmse_thresh") = 0.005f);
+                  py::arg("rmse_thresh") = 0.01f);
 }

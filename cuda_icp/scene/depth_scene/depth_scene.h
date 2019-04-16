@@ -8,6 +8,7 @@ struct Scene_projective{
     size_t width = 640, height = 480;
     float max_dist_diff = 0.01f; // m
     float first_dist_diff = 0.2f;
+    bool use_first = true;
     bool is_first = false;
     Mat3x3f K;
     Vec3f* pcd_ptr;  // pointer can unify cpu & cuda version
@@ -26,6 +27,16 @@ struct Scene_projective{
                                    device_vector_holder<Vec3f>& pcd_buffer,
                                     device_vector_holder<Vec3f>& normal_buffer);
 #endif
+
+    template<typename ...Params>
+    void init(Params&&...params)
+    {
+    #ifdef CUDA_ON
+        return init_Scene_projective_cuda(std::forward<Params>(params)...);
+    #else
+        return init_Scene_projective_cpu(std::forward<Params>(params)...);
+    #endif
+    }
 
     __device__ __host__
     void query(const Vec3f& src_pcd, Vec3f& dst_pcd, Vec3f& dst_normal, bool& valid) const {

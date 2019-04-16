@@ -78,12 +78,14 @@ static inline float computeOverlap(const T& a, const T& b)
 
 PoseRefine::PoseRefine(std::string model_path, cv::Mat depth, cv::Mat K):
     #ifdef CUDA_ON
-    device_tris(model.tris.size()),
+        tris(model.tris.size()),
+    #else
+        tris = model.tris,
     #endif
-    model(model_path)  // model first
+    model(model_path)  // model inits first
 {
 #ifdef CUDA_ON
-    thrust::copy(model.tris.begin(), model.tris.end(), device_tris.begin_thr());
+    thrust::copy(model.tris.begin(), model.tris.end(), tris.begin_thr());
 #endif
     if(!K.empty()) set_K(K);
     if(!depth.empty()) set_depth(depth);
@@ -99,18 +101,9 @@ void PoseRefine::set_depth(cv::Mat depth)
     proj_mat = cuda_renderer::compute_proj(K, width, height);
 
 #ifdef USE_PROJ
-#ifdef CUDA_ON
-    scene.init_Scene_projective_cuda(scene_depth, *reinterpret_cast<Mat3x3f*>(K.data),
-                                     pcd_buffer_cuda, normal_buffer_cuda);
+    scene.init(scene_depth, *reinterpret_cast<Mat3x3f*>(K.data), pcd_buffer, normal_buffer);
 #else
-    scene.init_Scene_projective_cpu(scene_depth, *reinterpret_cast<Mat3x3f*>(K.data), pcd_buffer, normal_buffer);
-#endif
-#else
-#ifdef CUDA_ON
-    scene.init_Scene_nn_cuda(scene_depth, *reinterpret_cast<Mat3x3f*>(K.data), kdtree);
-#else
-    scene.init_Scene_nn_cpu(scene_depth, *reinterpret_cast<Mat3x3f*>(K.data), kdtree);
-#endif
+    scene.init(scene_depth, *reinterpret_cast<Mat3x3f*>(K.data), kdtree);
 #endif
 
 }
@@ -186,34 +179,22 @@ std::vector<cuda_icp::RegistrationResult> PoseRefine::process_batch(std::vector<
 
     auto icp_batch = [&](int i){
         // directly down sample by viewport
-#ifdef CUDA_ON
-        auto depths = cuda_renderer::render_cuda_keep_in_gpu(device_tris, mat4_v,
-                                                           width_local, height_local, proj_mat);
-#else
-        auto depths = cuda_renderer::render_cpu(model.tris, mat4_v,
-                                                           width_local, height_local, proj_mat);
-#endif
+
+        auto depths = cuda_renderer::render(tris, mat4_v, width_local, height_local, proj_mat);
+
         // cuda per thread stream
 #pragma omp parallel num_threads(mat4_v.size())
         {
             int j = omp_get_thread_num();
             Mat4x4f temp = to_m(reinterpret_cast<Mat4x4f&>(mat4_v[j]));
 
-#ifdef CUDA_ON
-            auto pcd1_cuda = cuda_icp::depth2cloud_cuda(depths.data() + j*width_local*height_local,
-                                                        width_local, height_local, K_icp);
-#else
-            auto pcd1_cpu = cuda_icp::depth2cloud_cpu(depths.data() + j*width_local*height_local,
-                                                        width_local, height_local, K_icp);
-#endif
+            auto pcd1_cuda = cuda_icp::depth2cloud(depths.data() + j*width_local*height_local,
+                                                   width_local, height_local, K_icp);
+
 //            std::cout << "init: " << i << std::endl;
 //            helper::view_pcd(pcd1_cpu, pcd_buffer);
+            result_poses[j+i] = cuda_icp::ICP_Point2Plane(pcd1_cuda, scene, criteria);
 
-#ifdef CUDA_ON
-            result_poses[j+i] = cuda_icp::ICP_Point2Plane_cuda(pcd1_cuda, scene, criteria);
-#else
-            result_poses[j+i] = cuda_icp::ICP_Point2Plane_cpu(pcd1_cpu, scene, criteria);
-#endif
 //            if(result_poses[j+i].fitness_ > 0.7f && !record_){
 //                std::cout << "finally fitness_: " << result_poses[j+i].fitness_ << std::endl;
 //                std::cout << "finally inlier_rmse_: " << result_poses[j+i].inlier_rmse_ << std::endl;
@@ -325,11 +306,7 @@ std::vector<cuda_icp::RegistrationResult> PoseRefine::results_filter(std::vector
 //    cv::imshow("edge", scene_dep_edge);
 //    cv::waitKey(0);
 
-#ifdef CUDA_ON
-    auto depths = cuda_renderer::render_cuda(device_tris, mat4_v, width_local, height_local, proj_mat);
-#else
-    auto depths = cuda_renderer::render_cpu(model.tris, mat4_v, width_local, height_local, proj_mat);
-#endif
+    auto depths = cuda_renderer::render_host(tris, mat4_v, width_local, height_local, proj_mat);
 
 #pragma omp declare reduction (merge : std::vector<Result_bbox> : \
     omp_out.insert(omp_out.end(), omp_in.begin(), omp_in.end()))
@@ -427,17 +404,8 @@ auto PoseRefine::render_what(F f, std::vector<cv::Mat> &init_poses, int down_sam
     std::vector<cuda_renderer::Model::mat4x4> mat4_v(init_poses.size());
     for(size_t i=0; i<init_poses.size();i++) mat4_v[i].init_from_cv(init_poses[i]);
 
-#ifdef CUDA_ON
-        auto depths = cuda_renderer::render_cuda_keep_in_gpu(device_tris, mat4_v,
-                                                           width_local, height_local, proj_mat);
-
-        return f(depths, width_local, height_local, init_poses.size());
-
-#else
-        auto depths = cuda_renderer::render_cpu(model.tris, mat4_v,
-                                                           width_local, height_local, proj_mat);
-        return f(depths, width_local, height_local, init_poses.size());
-#endif
+    auto depths = cuda_renderer::render(tris, mat4_v, width_local, height_local, proj_mat);
+    return f(depths, width_local, height_local, init_poses.size());
 }
 
 std::vector<cv::Mat> PoseRefine::render_depth(std::vector<cv::Mat> &init_poses, int down_sample)
@@ -849,7 +817,7 @@ cv::Mat PoseRefine::get_depth_edge(cv::Mat &depth__, cv::Mat K)
     cv::Mat dst;
     cv::bitwise_or(high_curvature_edge, occ_edge, dst);
 
-    cv::dilate(dst, dst, cv::Mat::ones(7, 7, CV_8U));
+    cv::dilate(dst, dst, cv::Mat::ones(5, 5, CV_8U));
 
 //    cv::bitwise_not(dst, dst);
 //    cv::distanceTransform(dst, dst, CV_DIST_C, 3);  //dilute distance
@@ -868,4 +836,5 @@ cv::Mat PoseRefine::view_dep(cv::Mat dep)
     applyColorMap(adjMap, falseColorsMap, cv::COLORMAP_HOT);
     return falseColorsMap;
 }
+
 
