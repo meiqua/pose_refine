@@ -14,6 +14,12 @@
 
 namespace cuda_icp {
 
+#ifdef CUDA_ON
+    using V3f_holder = device_vector_holder<Vec3f>;
+#else
+    using V3f_holder = std::vector<Vec3f>;
+#endif
+
 // use custom mat/vec here, otherwise we have to mix eigen with cuda
 // then we may face some error due to eigen vesrion
 //class defination refer to open3d
@@ -91,6 +97,27 @@ const Scene_projective, const ICPConvergenceCriteria);
 extern template RegistrationResult ICP_Point2Plane_cuda(device_vector_holder<Vec3f>&,
 const Scene_nn, const ICPConvergenceCriteria);
 #endif
+
+
+template<typename ...Params>
+V3f_holder depth2cloud(Params&&...params)
+{
+#ifdef CUDA_ON
+    return cuda_icp::depth2cloud_cuda(std::forward<Params>(params)...);
+#else
+    return cuda_icp::depth2cloud_cpu(std::forward<Params>(params)...);
+#endif
+}
+
+template<typename ...Params>
+RegistrationResult ICP_Point2Plane(Params&&...params)
+{
+#ifdef CUDA_ON
+    return cuda_icp::ICP_Point2Plane_cuda(std::forward<Params>(params)...);
+#else
+    return cuda_icp::ICP_Point2Plane_cpu(std::forward<Params>(params)...);
+#endif
+}
 
 
 /// !!!!!!!!!!!!!!!!!! low level

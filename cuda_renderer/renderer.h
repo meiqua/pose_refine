@@ -174,6 +174,13 @@ public:
 };
 
 extern template class device_vector_holder<int>;
+extern template class device_vector_holder<Model::Triangle>;
+#endif
+
+#ifdef CUDA_ON
+    using Int_holder = device_vector_holder<int>;
+#else
+    using Int_holder = std::vector<int>;
 #endif
 
 std::vector<Model::mat4x4> mat_to_compact_4x4(const std::vector<cv::Mat>& poses);
@@ -189,11 +196,42 @@ std::vector<int32_t> render_cpu(const std::vector<Model::Triangle>& tris,const s
 std::vector<int32_t> render_cuda(const std::vector<Model::Triangle>& tris,const std::vector<Model::mat4x4>& poses,
                             size_t width, size_t height, const Model::mat4x4& proj_mat,
                                  const Model::ROI roi= {0, 0, 0, 0});
+// triangles in gpu side
+std::vector<int32_t> render_cuda(device_vector_holder<Model::Triangle>& tris,const std::vector<Model::mat4x4>& poses,
+                            size_t width, size_t height, const Model::mat4x4& proj_mat,
+                                 const Model::ROI roi= {0, 0, 0, 0});
+
 
 device_vector_holder<int> render_cuda_keep_in_gpu(const std::vector<Model::Triangle>& tris,const std::vector<Model::mat4x4>& poses,
                             size_t width, size_t height, const Model::mat4x4& proj_mat,
                                                        const Model::ROI roi= {0, 0, 0, 0});
+// triangles in gpu side
+device_vector_holder<int> render_cuda_keep_in_gpu(device_vector_holder<Model::Triangle>& tris,const std::vector<Model::mat4x4>& poses,
+                            size_t width, size_t height, const Model::mat4x4& proj_mat,
+                                                       const Model::ROI roi= {0, 0, 0, 0});
 #endif
+
+// render: results keep in gpu or cpu side
+template<typename ...Params>
+Int_holder render(Params&&...params)
+{
+#ifdef CUDA_ON
+    return cuda_renderer::render_cuda_keep_in_gpu(std::forward<Params>(params)...);
+#else
+    return cuda_renderer::render_cpu(std::forward<Params>(params)...);
+#endif
+}
+
+// render host: always in cpu side
+template<typename ...Params>
+std::vector<int32_t> render_host(Params&&...params)
+{
+#ifdef CUDA_ON
+    return cuda_renderer::render_cuda(std::forward<Params>(params)...);
+#else
+    return cuda_renderer::render_cpu(std::forward<Params>(params)...);
+#endif
+}
 
 //low_level
 namespace normal_functor{  // similar to thrust
