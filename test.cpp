@@ -9,7 +9,7 @@ using namespace std;
 
 static std::string prefix = "/home/meiqua/pose_refine/test/";
 
-//#define USE_PROJ
+#define USE_PROJ
 
 #ifdef CUDA_ON
 void test_cuda_icp(){
@@ -158,9 +158,7 @@ timer.reset();
     auto pcd1_cuda = cuda_icp::depth2cloud_cuda(depth_cuda.data(), width, height, K_);
 timer.out("depth2cloud_cuda");
 // view gpu pcd
-//    std::vector<::Vec3f> pcd1_host(pcd1_cuda.size());
-//    thrust::copy(pcd1_cuda.begin_thr(), pcd1_cuda.end_thr(), pcd1_host.begin());
-//    helper::view_pcd(pcd1_host);
+
 
 timer.reset();
 #ifdef USE_PROJ
@@ -177,6 +175,10 @@ timer.reset();
     auto result_cuda = cuda_icp::ICP_Point2Plane_cuda(pcd1_cuda, scene);
 timer.out("ICP_Point2Plane_cuda");
     Mat result_cv_cuda = helper::mat4x4f2cv(result_cuda.transformation_);
+
+//    std::vector<::Vec3f> pcd1_host(pcd1_cuda.size());
+//    thrust::copy(pcd1_cuda.begin_thr(), pcd1_cuda.end_thr(), pcd1_host.begin());
+//    helper::view_pcd(pcd_buffer, pcd1_host);
 
 
     cout << "\nresult: " << endl;
@@ -211,6 +213,8 @@ void depth_edge_test(){
     std::sort(rgb_paths.begin(), rgb_paths.end());
     std::sort(depth_paths.begin(), depth_paths.end());
 
+    PoseRefine refiner(prefix + "obj_06.ply");
+
     // from hinter dataset
     Mat modelK = (cv::Mat_<float>(3,3) << 572.4114, 0.0, 325.2611, 0.0, 573.57043, 242.04899, 0.0, 0.0, 1.0);
 
@@ -218,7 +222,7 @@ void depth_edge_test(){
         Mat rgb = imread(rgb_paths[i], CV_LOAD_IMAGE_ANYCOLOR);
         Mat depth = cv::imread(depth_paths[i], CV_LOAD_IMAGE_ANYCOLOR | CV_LOAD_IMAGE_ANYDEPTH);
 
-        Mat depth_edge = PoseRefine::get_depth_edge(depth);
+        Mat depth_edge = refiner.get_depth_edge(depth);
         imshow("depth", helper::view_dep(depth));
         imshow("depth edge", depth_edge);
         waitKey(0);

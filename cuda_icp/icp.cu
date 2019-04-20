@@ -167,12 +167,21 @@ RegistrationResult ICP_Point2Plane_cuda(device_vector_holder<Vec3f> &model_pcd, 
 
     for(uint32_t iter=0; iter<= criteria.max_iteration_; iter++){
 
-        if(iter==0 && scene.use_first) scene.set_first();
-        else scene.reset_first();
+        Vec29f Ab_tight;
 
-        Vec29f Ab_tight = thrust::transform_reduce(thrust::cuda::par.on(cudaStreamPerThread),
-                                        model_pcd.begin_thr(), model_pcd.end_thr(), thrust__pcd2Ab<Scene>(scene),
-                                        Vec29f::Zero(), thrust__plus());
+        if(iter==0 && scene.use_first){
+            scene.set_first();
+            Ab_tight = thrust::transform_reduce(thrust::cuda::par.on(cudaStreamPerThread),
+                                            model_pcd.begin_thr(), model_pcd.end_thr(),
+                                                thrust__pcd2Ab__only_T<Scene>(scene),
+                                            Vec29f::Zero(), thrust__plus());
+        }
+        else{
+            scene.reset_first();
+            Ab_tight = thrust::transform_reduce(thrust::cuda::par.on(cudaStreamPerThread),
+                                            model_pcd.begin_thr(), model_pcd.end_thr(), thrust__pcd2Ab<Scene>(scene),
+                                            Vec29f::Zero(), thrust__plus());
+        }
 
         // method from icpcuda
 //        Vec29f Ab_tight = custom_trans_reduce::transform_reduce(model_pcd.data(), model_pcd.size(),

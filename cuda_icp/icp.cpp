@@ -123,22 +123,29 @@ RegistrationResult ICP_Point2Plane_cpu(std::vector<Vec3f> &model_pcd, Scene scen
     std::vector<float> A_host(36, 0);
     std::vector<float> b_host(6, 0);
     thrust__pcd2Ab<Scene> trasnformer(scene);
-
-    // use one extra turn
-    for(uint32_t iter=0; iter<=criteria.max_iteration_; iter++){
-
-        if(iter==0 && scene.use_first) scene.set_first();
-        else scene.reset_first();
-
-        Vec29f reducer;
+    thrust__pcd2Ab__only_T<Scene> trasnformer_T(scene);
 
 #pragma omp declare reduction( + : Vec29f : omp_out += omp_in) \
                        initializer (omp_priv = Vec29f::Zero())
 
+    // use one extra turn
+    for(uint32_t iter=0; iter<=criteria.max_iteration_; iter++){
+        Vec29f reducer;
+        if(iter==0 && scene.use_first){
+             trasnformer_T.__scene.set_first();
+#pragma omp parallel for reduction(+: reducer)
+        for(size_t pcd_iter=0; pcd_iter<model_pcd.size(); pcd_iter++){
+            Vec29f result = trasnformer_T(model_pcd[pcd_iter]);
+            reducer += result;
+        }
+        }
+        else{
+            trasnformer.__scene.reset_first();
 #pragma omp parallel for reduction(+: reducer)
         for(size_t pcd_iter=0; pcd_iter<model_pcd.size(); pcd_iter++){
             Vec29f result = trasnformer(model_pcd[pcd_iter]);
             reducer += result;
+        }
         }
 
         Vec29f& Ab_tight = reducer;
@@ -260,13 +267,13 @@ RegistrationResult ICP_Point2Plane_cpu_global_memory_version(std::vector<Vec3f> 
         result.fitness_ = float(count) / model_pcd.size();
         result.inlier_rmse_ = std::sqrt(total_error / count);
 
-        {
-            std::cout << " --- cpu --- " << iter << " --- cpu ---" << std::endl;
-            std::cout << "total error: " << total_error << std::endl;
-            std::cout << "result.fitness_: " << result.fitness_ << std::endl;
-            std::cout << "result.inlier_rmse_: " << result.inlier_rmse_ << std::endl;
-            std::cout << " --- cpu --- " << iter << " --- cpu ---" << std::endl << std::endl;
-        }
+//        {
+//            std::cout << " --- cpu --- " << iter << " --- cpu ---" << std::endl;
+//            std::cout << "total error: " << total_error << std::endl;
+//            std::cout << "result.fitness_: " << result.fitness_ << std::endl;
+//            std::cout << "result.inlier_rmse_: " << result.inlier_rmse_ << std::endl;
+//            std::cout << " --- cpu --- " << iter << " --- cpu ---" << std::endl << std::endl;
+//        }
 
         // last extra iter, just compute fitness & mse
         if(iter == criteria.max_iteration_) return result;
@@ -279,19 +286,19 @@ RegistrationResult ICP_Point2Plane_cpu_global_memory_version(std::vector<Vec3f> 
         Eigen::Matrix<float, 6, 6> A = A_buffer.transpose()*A_buffer;
         Eigen::Matrix<float, 6, 1> b = A_buffer.transpose()*b_buffer;
 
-        std::cout << "~~~~~~~~A~~~~~~" << std::endl;
-        std::cout << A;
-        std::cout << "\n~~~~~~~~~~~~~~\n" << std::endl;
+//        std::cout << "~~~~~~~~A~~~~~~" << std::endl;
+//        std::cout << A;
+//        std::cout << "\n~~~~~~~~~~~~~~\n" << std::endl;
 
-        std::cout << "~~~~~~~~b~~~~~~" << std::endl;
-        std::cout << b;
-        std::cout << "\n~~~~~~~~~~~~~~\n" << std::endl;
+//        std::cout << "~~~~~~~~b~~~~~~" << std::endl;
+//        std::cout << b;
+//        std::cout << "\n~~~~~~~~~~~~~~\n" << std::endl;
 
         Mat4x4f extrinsic = eigen_slover_666(A.data(), b.data());
 
-        std::cout << "~~extrinsic~~~~" << std::endl;
-        std::cout << extrinsic;
-        std::cout << "\n~~~~~~~~~~~~~~\n" << std::endl;
+//        std::cout << "~~extrinsic~~~~" << std::endl;
+//        std::cout << extrinsic;
+//        std::cout << "\n~~~~~~~~~~~~~~\n" << std::endl;
 
         transform_pcd(model_pcd, extrinsic);
         result.transformation_ = extrinsic * result.transformation_;

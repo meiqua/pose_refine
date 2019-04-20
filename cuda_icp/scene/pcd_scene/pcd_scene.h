@@ -47,7 +47,7 @@ public:
 // no matter it's projective or NN
 class Scene_nn{
 public:
-    float max_dist_diff = 0.1f; // m
+    float max_dist_diff = 0.02f; // m
     float first_dist_diff = 0.2f;
     bool use_first = false;
     bool is_first = false;

@@ -30,10 +30,12 @@ PYBIND11_MODULE(pose_refine_pybind, m) {
             .def(py::init<std::string, cv::Mat, cv::Mat>(), py::arg("model_path"),
                  py::arg("depth") = cv::Mat(), py::arg("K") = cv::Mat())
             .def_readwrite("scene_dep_edge", &PoseRefine::scene_dep_edge)
+            .def("get_depth_edge", &PoseRefine::get_depth_edge)
             .def("view_dep", &PoseRefine::view_dep)
             .def("set_depth", &PoseRefine::set_depth)
             .def("set_K", &PoseRefine::set_K)
             .def("set_K_width_height", &PoseRefine::set_K_width_height)
+            .def("set_max_dist_diff", &PoseRefine::set_max_dist_diff)
             .def("render_depth", &PoseRefine::render_depth, py::arg("init_poses"), py::arg("down_sample") = 1)
             .def("render_mask", &PoseRefine::render_mask, py::arg("init_poses"), py::arg("down_sample") = 1)
             .def("render_depth_mask", &PoseRefine::render_depth_mask, py::arg("init_poses"), py::arg("down_sample") = 1)

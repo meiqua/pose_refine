@@ -7,7 +7,7 @@
 struct Scene_projective{
     size_t width = 640, height = 480;
     float max_dist_diff = 0.01f; // m
-    float first_dist_diff = 0.2f;
+    float first_dist_diff = 0.4f;
     bool use_first = true;
     bool is_first = false;
     Mat3x3f K;

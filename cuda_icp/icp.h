@@ -206,6 +206,89 @@ struct thrust__pcd2Ab
     }
 };
 
+// used for first only T trans
+template<class Scene>
+struct thrust__pcd2Ab__only_T
+{
+    Scene __scene;
+
+    __host__ __device__
+    thrust__pcd2Ab__only_T(Scene scene): __scene(scene){
+
+    }
+
+    __host__ __device__ Vec29f operator()(const Vec3f &src_pcd) const {
+        Vec29f result;
+        Vec3f dst_pcd, dst_normal; bool valid;
+        __scene.query(src_pcd, dst_pcd, dst_normal, valid);
+        if(!valid) return result;
+        else{
+            result[28] = 1;  //valid count
+            // dot
+            float b_temp = (dst_pcd - src_pcd).x * dst_normal.x +
+                          (dst_pcd - src_pcd).y * dst_normal.y +
+                          (dst_pcd - src_pcd).z * dst_normal.z;
+
+            // according to https://github.com/intel-isl/Open3D/issues/874#issuecomment-476747366
+            // this is better than pow2(t_temp)
+            result[27] = pow2((dst_pcd - src_pcd).x) + pow2((dst_pcd - src_pcd).y) + pow2((dst_pcd - src_pcd).z); // mse
+
+            // cross
+            float A_temp[6];
+            A_temp[0] = 0;
+            A_temp[1] = 0;
+            A_temp[2] = 0;
+
+            A_temp[3] = dst_normal.x;
+            A_temp[4] = dst_normal.y;
+            A_temp[5] = dst_normal.z;
+
+            // ATA lower
+            // 0  x  x  x  x  x
+            // 1  6  x  x  x  x
+            // 2  7 11  x  x  x
+            // 3  8 12 15  x  x
+            // 4  9 13 16 18  x
+            // 5 10 14 17 19 20
+            result[ 0] = A_temp[0] * A_temp[0];
+            result[ 1] = A_temp[0] * A_temp[1];
+            result[ 2] = A_temp[0] * A_temp[2];
+            result[ 3] = A_temp[0] * A_temp[3];
+            result[ 4] = A_temp[0] * A_temp[4];
+            result[ 5] = A_temp[0] * A_temp[5];
+
+            result[ 6] = A_temp[1] * A_temp[1];
+            result[ 7] = A_temp[1] * A_temp[2];
+            result[ 8] = A_temp[1] * A_temp[3];
+            result[ 9] = A_temp[1] * A_temp[4];
+            result[10] = A_temp[1] * A_temp[5];
+
+            result[11] = A_temp[2] * A_temp[2];
+            result[12] = A_temp[2] * A_temp[3];
+            result[13] = A_temp[2] * A_temp[4];
+            result[14] = A_temp[2] * A_temp[5];
+
+            result[15] = A_temp[3] * A_temp[3];
+            result[16] = A_temp[3] * A_temp[4];
+            result[17] = A_temp[3] * A_temp[5];
+
+            result[18] = A_temp[4] * A_temp[4];
+            result[19] = A_temp[4] * A_temp[5];
+
+            result[20] = A_temp[5] * A_temp[5];
+
+            // ATb
+            result[21] = A_temp[0] * b_temp;
+            result[22] = A_temp[1] * b_temp;
+            result[23] = A_temp[2] * b_temp;
+            result[24] = A_temp[3] * b_temp;
+            result[25] = A_temp[4] * b_temp;
+            result[26] = A_temp[5] * b_temp;
+            return result;
+        }
+    }
+};
+
 struct thrust__plus{
     __host__ __device__ Vec29f operator()(const Vec29f &in1, const Vec29f &in2) const{
         return in1 + in2;

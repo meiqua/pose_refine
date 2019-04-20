@@ -95,7 +95,7 @@ void PoseRefine::set_depth(cv::Mat depth)
 {
     assert(depth.type() == CV_16U && K.type() == CV_32F);
 
-    cv::medianBlur(depth, depth, 5);
+//    cv::medianBlur(depth, depth, 5);
     scene_depth = depth;
     scene_dep_edge = get_depth_edge(depth, K);
     width = depth.cols;
@@ -126,7 +126,7 @@ void PoseRefine::set_K_width_height(cv::Mat K, int width, int height)
 }
 
 std::vector<cuda_icp::RegistrationResult> PoseRefine::process_batch(std::vector<cv::Mat>& init_poses,
-                                                                    int down_sample)
+                                                                    float down_sample)
 {
     const bool debug_ = false;
     const bool record_ = false;
@@ -155,7 +155,6 @@ std::vector<cuda_icp::RegistrationResult> PoseRefine::process_batch(std::vector<
     std::vector<cuda_icp::RegistrationResult> result_poses(init_size);
     cuda_icp::ICPConvergenceCriteria criteria;
 
-    assert(width%down_sample == 0 && height%down_sample == 0);
     const int width_local = width/down_sample;
     const int height_local = height/down_sample;
 
@@ -192,6 +191,7 @@ std::vector<cuda_icp::RegistrationResult> PoseRefine::process_batch(std::vector<
 
             auto pcd1_cuda = cuda_icp::depth2cloud(depths.data() + j*width_local*height_local,
                                                    width_local, height_local, K_icp);
+
 
 //            std::cout << "init: " << i << std::endl;
 //            helper::view_pcd(pcd1_cpu, pcd_buffer);
@@ -397,9 +397,8 @@ std::vector<cuda_icp::RegistrationResult> PoseRefine::results_filter(std::vector
 }
 
 template<typename F>
-auto PoseRefine::render_what(F f, std::vector<cv::Mat> &init_poses, int down_sample)
+auto PoseRefine::render_what(F f, std::vector<cv::Mat> &init_poses, float down_sample)
 {
-    assert(width%down_sample == 0 && height%down_sample == 0);
     const int width_local = width/down_sample;
     const int height_local = height/down_sample;
 
@@ -410,7 +409,7 @@ auto PoseRefine::render_what(F f, std::vector<cv::Mat> &init_poses, int down_sam
     return f(depths, width_local, height_local, init_poses.size());
 }
 
-std::vector<cv::Mat> PoseRefine::render_depth(std::vector<cv::Mat> &init_poses, int down_sample)
+std::vector<cv::Mat> PoseRefine::render_depth(std::vector<cv::Mat> &init_poses, float down_sample)
 {
 #ifdef CUDA_ON
     return render_what(cuda_renderer::raw2depth_uint16_cuda, init_poses, down_sample);
@@ -419,7 +418,7 @@ std::vector<cv::Mat> PoseRefine::render_depth(std::vector<cv::Mat> &init_poses, 
 #endif
 }
 
-std::vector<cv::Mat> PoseRefine::render_mask(std::vector<cv::Mat> &init_poses, int down_sample)
+std::vector<cv::Mat> PoseRefine::render_mask(std::vector<cv::Mat> &init_poses, float down_sample)
 {
 #ifdef CUDA_ON
     return render_what(cuda_renderer::raw2mask_uint8_cuda, init_poses, down_sample);
@@ -428,7 +427,7 @@ std::vector<cv::Mat> PoseRefine::render_mask(std::vector<cv::Mat> &init_poses, i
 #endif
 }
 
-std::vector<std::vector<cv::Mat> > PoseRefine::render_depth_mask(std::vector<cv::Mat> &init_poses, int down_sample)
+std::vector<std::vector<cv::Mat> > PoseRefine::render_depth_mask(std::vector<cv::Mat> &init_poses, float down_sample)
 {
 #ifdef CUDA_ON
     return render_what(cuda_renderer::raw2depth_mask_cuda, init_poses, down_sample);
@@ -482,7 +481,11 @@ std::vector<cv::Mat> PoseRefine::poses_extend(std::vector<cv::Mat> &init_poses, 
     assert(init_poses.size() > 0);
     assert(init_poses[0].type() == CV_32F && init_poses[0].rows == 4 && init_poses[0].cols == 4);
 
-    std::vector<cv::Mat> extended(init_poses.size() * 27);
+    size_t total_size = 27;
+    bool only_2_rot = true;  // 2 rot is neighbor with all 27, but has half the candidate
+    if(only_2_rot) total_size = 13;
+
+    std::vector<cv::Mat> extended(init_poses.size() * total_size);
     for(size_t pose_iter=0; pose_iter<init_poses.size(); pose_iter++){
         auto& pose = init_poses[pose_iter];
 
@@ -490,7 +493,13 @@ std::vector<cv::Mat> PoseRefine::poses_extend(std::vector<cv::Mat> &init_poses, 
         for(int i=-1; i<=1; i++){
             for(int j=-1; j<=1; j++){
                 for(int k=-1; k<=1; k++){
-                    auto& extended_cur = extended[pose_iter*27 + shift];
+
+                    if(only_2_rot){
+                        if(std::abs(i) + std::abs(j) + std::abs(k) != 2
+                                && (std::abs(i) + std::abs(j) + std::abs(k) != 0)) continue;
+                    }
+
+                    auto& extended_cur = extended[pose_iter*total_size + shift];
                     extended_cur = pose.clone();
                     if(i==0 && j==0 && k==0){shift++; continue;}
 
@@ -630,7 +639,7 @@ cv::Mat PoseRefine::get_depth_edge(cv::Mat &depth__, cv::Mat K)
         fy = K.at<float>(1, 1);
     }
 
-    cv::medianBlur(depth, depth, 5);
+//    cv::medianBlur(depth, depth, 5);
     cv::Mat normals = get_normal(depth, K);
 
     cv::Mat N_xyz[3];
@@ -682,7 +691,6 @@ cv::Mat PoseRefine::get_depth_edge(cv::Mat &depth__, cv::Mat K)
 
     float tLow = 0.2f;
     float tHigh = 1.1f;
-    int max_search_neighbors_ = 50;
     cv::Mat mag_nms = cv::Mat(mag.size(), CV_32FC1, cv::Scalar(0));
     for(int r=1; r<mag.rows; r++){
         for(int c=1; c<mag.cols; c++){
@@ -758,61 +766,23 @@ cv::Mat PoseRefine::get_depth_edge(cv::Mat &depth__, cv::Mat K)
                 }
             }
             if(!invalid){
-                float max_d = 0;
+                int max_d = 0;
                 int max_offset_r = 0;
                 int max_offset_c = 0;
                 for(int i=0; i<3; i++){
                     for(int j=0; j<3; j++){
-
-                        cv::Vec3f normal = normals.at<cv::Vec3f>(r+i, c+j);
-                        cv::Vec3f vec = {
-                            (j-1)/fx,
-                            (i-1)/fy,
-                            dep_dn[i][j]/1000.0f
-                        };
-
-                        float dist = std::abs(vec.dot(normal));
-
-                        if(dist > max_d){
-                            max_d = dist;
+                        if(std::abs(dep_dn[i][j]) > max_d){
+                            max_d = std::abs(dep_dn[i][j]);
                             max_offset_r = i-1;
                             max_offset_c = j-1;
                         }
                     }
                 }
-                if(max_d > 0.05f){
+                if(max_d > 0.02*dep_Dxy){
                     occ_edge.at<uchar>(r+max_offset_r, c+max_offset_c) = 255;
                 }
             }else{
-//                occ_edge.at<uchar>(r, c) = 255;
-                if(dx == 0 && dy == 0) continue;
-                dx /= invalid_count; dy /= invalid_count;
-
-                int corr_depth = 0;
-                for(int radius = 1; radius < max_search_neighbors_; radius++){
-                    int new_r = r + int(std::floor(dy*radius));
-                    int new_c = c + int(std::floor(dx*radius));
-                    if(new_r < 0 || new_r >= depth.rows ||
-                       new_c < 0 || new_c > depth.cols) break;
-
-                    int cur_depth = depth.at<uint16_t>(new_r, new_c);
-                    if(cur_depth > 0){ corr_depth = cur_depth; break;}
-                }
-
-                if(corr_depth > 0){
-                    int diff = corr_depth - dep_Dxy;
-                    if(std::abs(diff) > 0.02 * dep_Dxy){
-                        if(diff < 0){ // occluding edge, discard
-//                            occ_edge.at<uchar>(r, c) = 255;
-                        }else{
-                            // occluding edge,
-                            occ_edge.at<uchar>(r, c) = 255;
-
-                        }
-                    }
-                }else{
-                    // nan boundary
-                }
+                occ_edge.at<uchar>(r, c) = 255;
             }
         }
     }
