@@ -310,7 +310,7 @@ std::vector<cv::Mat> cuda_renderer::raw2depth_uint16_cpu(std::vector<int32_t> &r
 
     for(size_t i=0; i<pose_size; i++){
         for(int r=0; r<height; r++){
-            for(int c=0; c<height; c++){
+            for(int c=0; c<width; c++){
                 depths[i].at<uint16_t>(r, c) = uint16_t(raw_data[i*step + width*r + c]);
             }
         }
@@ -331,7 +331,7 @@ std::vector<cv::Mat> cuda_renderer::raw2mask_uint8_cpu(std::vector<int32_t> &raw
     size_t step = width*height;
     for(size_t i=0; i<pose_size; i++){
         for(int r=0; r<height; r++){
-            for(int c=0; c<height; c++){
+            for(int c=0; c<width; c++){
                 masks[i].at<uchar>(r, c) = ((raw_data[i*step + width*r + c] > 0)?255:0);
             }
         }
@@ -353,7 +353,7 @@ std::vector<std::vector<cv::Mat> > cuda_renderer::raw2depth_mask_cpu(std::vector
     size_t step = width*height;
     for(size_t i=0; i<pose_size; i++){
         for(int r=0; r<height; r++){
-            for(int c=0; c<height; c++){
+            for(int c=0; c<width; c++){
 
                 auto& raw = raw_data[i*step + width*r + c];
                 results[i][0].at<uint16_t>(r, c) = uint16_t(raw);
