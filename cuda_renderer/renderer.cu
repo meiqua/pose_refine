@@ -106,9 +106,9 @@ void rasterization(const Model::Triangle dev_tri, Model::float3 last_row,
     size_t real_width = width;
     if(roi.width > 0 && roi.height > 0){  // depth will be flipped
         clamp_min[0] = roi.x;
-        clamp_min[1] = height - (roi.y + roi.height - 1);
+        clamp_min[1] = height-1 - (roi.y + roi.height - 1);
         clamp_max[0] = (roi.x + roi.width) - 1;
-        clamp_max[1] = height - roi.y;
+        clamp_max[1] = height-1 - roi.y;
         real_width = roi.width;
     }
 
@@ -139,7 +139,7 @@ void rasterization(const Model::Triangle dev_tri, Model::float3 last_row,
                     /(bc_over_z.x + bc_over_z.y + bc_over_z.z);
 
             size_t x_to_write = (P[0] + roi.x);
-            size_t y_to_write = (height - P[1] - roi.y);
+            size_t y_to_write = (height-1 - P[1] - roi.y);
 
             int32_t depth = int32_t(frag_depth/**1000*/ + 0.5f);
             int32_t& depth_to_write = depth_entry[x_to_write+y_to_write*real_width];
