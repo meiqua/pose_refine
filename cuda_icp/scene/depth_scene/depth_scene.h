@@ -30,7 +30,8 @@ struct Scene_projective{
     void query(const Vec3f& src_pcd, Vec3f& dst_pcd, Vec3f& dst_normal, bool& valid) const {
         Vec3i x_y_dep = pcd2dep(src_pcd, K);
 
-        if(x_y_dep.x >= width || x_y_dep.y >= height){
+        if(x_y_dep.x >= width || x_y_dep.y >= height ||
+                x_y_dep.x < 0 || x_y_dep.y < 0){
             valid = false;
             return;
         }
