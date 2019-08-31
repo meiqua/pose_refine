@@ -109,8 +109,8 @@ timer.out("init scene cpu");
             scene_pcd.points_.emplace_back(float(p.x), float(p.y), float(p.z));
         }
 
-        open3d::geometry::EstimateNormals(scene_pcd);
-        open3d::geometry::EstimateNormals(model_pcd);
+        scene_pcd.EstimateNormals();
+        model_pcd.EstimateNormals();
 
         timer.reset();
         auto final_result = open3d::registration::RegistrationICP(model_pcd, scene_pcd, 0.1,

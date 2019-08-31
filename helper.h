@@ -1,6 +1,6 @@
 #pragma once
 
-#include "pose_refine.h"
+#include "pose_renderer.h"
 #include "cuda_icp/icp.h"
 #include <chrono>
 #include "Open3D/Open3D.h"
@@ -42,7 +42,7 @@ static void view_dep_open3d(cv::Mat& modelDepth, cv::Mat modelK = cv::Mat()){
     }
 
     open3d::geometry::Image model_depth_open3d;
-    model_depth_open3d.PrepareImage(modelDepth.cols, modelDepth.rows, 1, 2);
+    model_depth_open3d.Prepare(modelDepth.cols, modelDepth.rows, 1, 2);
 
     std::copy_n(modelDepth.data, model_depth_open3d.data_.size(),
                 model_depth_open3d.data_.begin());
@@ -50,10 +50,10 @@ static void view_dep_open3d(cv::Mat& modelDepth, cv::Mat modelK = cv::Mat()){
                                                   double(modelK.at<float>(0, 0)), double(modelK.at<float>(1, 1)),
                                                   double(modelK.at<float>(0, 2)), double(modelK.at<float>(1, 2)));
 
-    auto model_pcd = open3d::geometry::CreatePointCloudFromDepthImage(model_depth_open3d, K_model_open3d);
+    auto model_pcd = open3d::geometry::PointCloud::CreateFromDepthImage(model_depth_open3d, K_model_open3d);
 
     double voxel_size = 0.005;
-    auto model_pcd_down = open3d::geometry::VoxelDownSample(*model_pcd, voxel_size);
+    auto model_pcd_down = model_pcd->VoxelDownSample(voxel_size);
 
 //    auto model_pcd_down = open3d::UniformDownSample(*model_pcd, 5);
 //    auto model_pcd_down = model_pcd;
@@ -69,10 +69,10 @@ static void view_pcd(std::vector<::Vec3f>& pcd_in){
         model_pcd.points_.emplace_back(double(p.x), double(p.y), double(p.z));
     }
 
-    open3d::geometry::EstimateNormals(model_pcd);
+    model_pcd.EstimateNormals();
 
     double voxel_size = 0.005;
-    auto model_pcd_down = open3d::geometry::VoxelDownSample(model_pcd, voxel_size);
+    auto model_pcd_down = model_pcd.VoxelDownSample(voxel_size);
 
 //    auto model_pcd_down = open3d::UniformDownSample(*model_pcd, 5);
 //    auto model_pcd_down = model_pcd;
@@ -93,12 +93,12 @@ static void view_pcd(std::vector<::Vec3f>& pcd_in, std::vector<::Vec3f>& pcd_in2
         model_pcd2.points_.emplace_back(double(p.x), double(p.y), double(p.z));
     }
 
-    open3d::geometry::EstimateNormals(model_pcd2);
-    open3d::geometry::EstimateNormals(model_pcd);
+    model_pcd2.EstimateNormals();
+    model_pcd.EstimateNormals();
 
     double voxel_size = 0.005;
-    auto model_pcd_down = open3d::geometry::VoxelDownSample(model_pcd, voxel_size);
-    auto model_pcd_down2 = open3d::geometry::VoxelDownSample(model_pcd2, voxel_size);
+    auto model_pcd_down = model_pcd.VoxelDownSample(voxel_size);
+    auto model_pcd_down2 = model_pcd2.VoxelDownSample(voxel_size);
 
 //    auto model_pcd_down = open3d::UniformDownSample(*model_pcd, 5);
 //    auto model_pcd_down = model_pcd;
@@ -110,12 +110,12 @@ static void view_pcd(std::vector<::Vec3f>& pcd_in, std::vector<::Vec3f>& pcd_in2
 
 static void view_pcd(open3d::geometry::PointCloud& model_pcd, open3d::geometry::PointCloud& model_pcd2){
 
-    open3d::geometry::EstimateNormals(model_pcd2);
-    open3d::geometry::EstimateNormals(model_pcd);
+    model_pcd2.EstimateNormals();
+    model_pcd.EstimateNormals();
 
     double voxel_size = 0.005;
-    auto model_pcd_down = open3d::geometry::VoxelDownSample(model_pcd, voxel_size);
-    auto model_pcd_down2 = open3d::geometry::VoxelDownSample(model_pcd2, voxel_size);
+    auto model_pcd_down = model_pcd.VoxelDownSample(voxel_size);
+    auto model_pcd_down2 = model_pcd2.VoxelDownSample(voxel_size);
 
     model_pcd_down->PaintUniformColor({1, 0.706, 0});
     model_pcd_down2->PaintUniformColor({0, 0.651, 0.929});

@@ -44,7 +44,7 @@ list(APPEND pose_refine_lib ${Open3D_LIBRARIES})
 
 
 # src
-SET(pose_refine_srcs pose_refine.cpp)
+SET(pose_refine_srcs pose_renderer.cpp)
 
 
 # lib & test exe
