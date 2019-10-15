@@ -138,7 +138,7 @@ void rasterization(const Model::Triangle dev_tri, Model::float3 last_row,
             float frag_depth = (bc_screen.x + bc_screen.y + bc_screen.z)
                     /(bc_over_z.x + bc_over_z.y + bc_over_z.z);
 
-            size_t x_to_write = (P[0] + roi.x);
+            size_t x_to_write = (P[0] - roi.x);
             size_t y_to_write = (height-1 - P[1] - roi.y);
 
             int32_t depth = int32_t(frag_depth/**1000*/ + 0.5f);
