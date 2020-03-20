@@ -35,16 +35,16 @@ public:
     void LoadModel(const std::string & fileName);
 
     struct int3 {
-        size_t v0;
-        size_t v1;
-        size_t v2;
+        int v0;
+        int v1;
+        int v2;
     };
 
     struct ROI{
-        size_t x;
-        size_t y;
-        size_t width;
-        size_t height;
+        int x;
+        int y;
+        int width;
+        int height;
     };
 
     struct float3{
@@ -82,6 +82,15 @@ public:
             temp = b2; b2=c1; c1=temp;
             temp = b3; b3=d1; d1=temp;
             temp = c3; c3=d2; d2=temp;
+        }
+
+        friend std::ostream& operator<<(std::ostream& os, const mat4x4& dt)
+        {
+            os << dt.a0 << '\t' << dt.a1 << '\t' << dt.a2 << '\t' << dt.a3 << std::endl;
+            os << dt.b0 << '\t' << dt.b1 << '\t' << dt.b2 << '\t' << dt.b3 << std::endl;
+            os << dt.c0 << '\t' << dt.c1 << '\t' << dt.c2 << '\t' << dt.c3 << std::endl;
+            os << dt.d0 << '\t' << dt.d1 << '\t' << dt.d2 << '\t' << dt.d3 << std::endl;
+            return os;
         }
 
         void init_from_cv(const cv::Mat& pose){ // so stupid
@@ -172,6 +181,15 @@ public:
     void __malloc(size_t size);
     void __free();
 };
+
+extern template class device_vector_holder<int>;
+extern template class device_vector_holder<Model::Triangle>;
+#endif
+
+#ifdef CUDA_ON
+    using Int_holder = device_vector_holder<int>;
+#else
+    using Int_holder = std::vector<int>;
 #endif
 
 std::vector<Model::mat4x4> mat_to_compact_4x4(const std::vector<cv::Mat>& poses);
@@ -183,15 +201,51 @@ std::vector<int32_t> render_cpu(const std::vector<Model::Triangle>& tris,const s
                             size_t width, size_t height, const Model::mat4x4& proj_mat,
                                 const Model::ROI roi= {0, 0, 0, 0});
 
+std::vector<cv::Mat> raw2depth_uint16_cpu(std::vector<int32_t>& raw_data, size_t width, size_t height, size_t pose_size);
+std::vector<cv::Mat> raw2mask_uint8_cpu(std::vector<int32_t>& raw_data, size_t width, size_t height, size_t pose_size);
+std::vector<std::vector<cv::Mat>> raw2depth_mask_cpu(std::vector<int32_t>& raw_data, size_t width, size_t height, size_t pose_size);
+
 #ifdef CUDA_ON
 std::vector<int32_t> render_cuda(const std::vector<Model::Triangle>& tris,const std::vector<Model::mat4x4>& poses,
+                            size_t width, size_t height, const Model::mat4x4& proj_mat,
+                                 const Model::ROI roi= {0, 0, 0, 0});
+
+std::vector<int32_t> render_cuda(device_vector_holder<Model::Triangle>& tris,const std::vector<Model::mat4x4>& poses,
                             size_t width, size_t height, const Model::mat4x4& proj_mat,
                                  const Model::ROI roi= {0, 0, 0, 0});
 
 device_vector_holder<int> render_cuda_keep_in_gpu(const std::vector<Model::Triangle>& tris,const std::vector<Model::mat4x4>& poses,
                             size_t width, size_t height, const Model::mat4x4& proj_mat,
                                                        const Model::ROI roi= {0, 0, 0, 0});
+
+device_vector_holder<int> render_cuda_keep_in_gpu(device_vector_holder<Model::Triangle>& tris,const std::vector<Model::mat4x4>& poses,
+                            size_t width, size_t height, const Model::mat4x4& proj_mat,
+                                                       const Model::ROI roi= {0, 0, 0, 0});
+
+std::vector<cv::Mat> raw2depth_uint16_cuda(device_vector_holder<int>& raw_data, size_t width, size_t height, size_t pose_size);
+std::vector<cv::Mat> raw2mask_uint8_cuda(device_vector_holder<int>& raw_data, size_t width, size_t height, size_t pose_size);
+std::vector<std::vector<cv::Mat>> raw2depth_mask_cuda(device_vector_holder<int32_t>& raw_data, size_t width, size_t height, size_t pose_size);
 #endif
+
+template<typename ...Params>
+Int_holder render(Params&&...params)
+{
+#ifdef CUDA_ON
+    return cuda_renderer::render_cuda_keep_in_gpu(std::forward<Params>(params)...);
+#else
+    return cuda_renderer::render_cpu(std::forward<Params>(params)...);
+#endif
+}
+
+template<typename ...Params>
+std::vector<int32_t> render_host(Params&&...params)
+{
+#ifdef CUDA_ON
+    return cuda_renderer::render_cuda(std::forward<Params>(params)...);
+#else
+    return cuda_renderer::render_cpu(std::forward<Params>(params)...);
+#endif
+}
 
 //low_level
 namespace normal_functor{  // similar to thrust

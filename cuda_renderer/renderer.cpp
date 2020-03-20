@@ -75,6 +75,8 @@ void cuda_renderer::Model::recursive_render(const aiScene *sc, const aiNode *nd,
 
         for (size_t t = 0; t < mesh->mNumFaces; ++t){
             const struct aiFace* face = &mesh->mFaces[t];
+
+            if(face->mNumIndices < 3) continue;  // invalid face, don't know why they exists in hinter obj_03.ply
             assert(face->mNumIndices == 3 && "we only render triangle, use tools like meshlab to modify this models");
 
             Triangle tri_temp;
@@ -160,28 +162,27 @@ cuda_renderer::Model::mat4x4 cuda_renderer::compute_proj(const cv::Mat &K, int w
 {
     cuda_renderer::Model::mat4x4 p;
     p.a0 = 2*K.at<float>(0, 0)/width;
-    p.a1 = -2*K.at<float>(0, 1)/width;
-    p.a2 = -2*K.at<float>(0, 2)/width + 1;
+    p.a1 = -2*K.at<float>(0, 1)/width; p.a1 = -p.a1;  // yz flip
+    p.a2 = -2*K.at<float>(0, 2)/width + 1; p.a2 = -p.a2;
     p.a3 = 0;
 
     p.b0 = 0;
-    p.b1 = 2*K.at<float>(1, 1)/height;
-    p.b2 = 2*K.at<float>(1, 2)/width - 1;
+    p.b1 = 2*K.at<float>(1, 1)/height; p.b1 = -p.b1;
+    p.b2 = 2*K.at<float>(1, 2)/height - 1; p.b2 = -p.b2;
     p.b3 = 0;
 
     p.c0 = 0;
     p.c1 = 0;
-    p.c2 = -(far+near)/(far-near);
+    p.c2 = -(far+near)/(far-near); p.c2 = -p.c2;
     p.c3 = -2*far*near/(far-near);
 
     p.d0 = 0;
     p.d1 = 0;
-    p.d2 = -1;
+    p.d2 = -1; p.d2 = -p.d2;
     p.d3 = 0;
 
     return p;
 }
-
 
 // cpu renderer, for test
 
@@ -193,9 +194,14 @@ void rasterization(const Model::Triangle dev_tri, Model::float3 last_row,
     float pts2[3][2];
 
     // viewport transform(0, 0, width, height)
-    pts2[0][0] = dev_tri.v0.x/last_row.x*width/2.0f+width/2.0f; pts2[0][1] = dev_tri.v0.y/last_row.x*height/2.0f+height/2.0f;
-    pts2[1][0] = dev_tri.v1.x/last_row.y*width/2.0f+width/2.0f; pts2[1][1] = dev_tri.v1.y/last_row.y*height/2.0f+height/2.0f;
-    pts2[2][0] = dev_tri.v2.x/last_row.z*width/2.0f+width/2.0f; pts2[2][1] = dev_tri.v2.y/last_row.z*height/2.0f+height/2.0f;
+    pts2[0][0] = dev_tri.v0.x/last_row.x*width/2.0f+width/2.0f;
+    pts2[0][1] = dev_tri.v0.y/last_row.x*height/2.0f+height/2.0f;
+
+    pts2[1][0] = dev_tri.v1.x/last_row.y*width/2.0f+width/2.0f;
+    pts2[1][1] = dev_tri.v1.y/last_row.y*height/2.0f+height/2.0f;
+
+    pts2[2][0] = dev_tri.v2.x/last_row.z*width/2.0f+width/2.0f;
+    pts2[2][1] = dev_tri.v2.y/last_row.z*height/2.0f+height/2.0f;
 
     float bboxmin[2] = {FLT_MAX,  FLT_MAX};
     float bboxmax[2] = {-FLT_MAX, -FLT_MAX};
@@ -205,9 +211,9 @@ void rasterization(const Model::Triangle dev_tri, Model::float3 last_row,
 
     size_t real_width = width;
     if(roi.width > 0 && roi.height > 0){  // depth will be flipped
-        clamp_min[0] = width-1 - (roi.x + roi.width) + 1; // +1 avoid out of roi
-        clamp_min[1] = height-1 - (roi.y + roi.height) + 1;
-        clamp_max[0] = width-1 - roi.x;
+        clamp_min[0] = roi.x;
+        clamp_min[1] = height-1 - (roi.y + roi.height - 1);
+        clamp_max[0] = (roi.x + roi.width) - 1;
         clamp_max[1] = height-1 - roi.y;
         real_width = roi.width;
     }
@@ -231,11 +237,15 @@ void rasterization(const Model::Triangle dev_tri, Model::float3 last_row,
             Model::float3 bc_over_z = {bc_screen.x/last_row.x, bc_screen.y/last_row.y, bc_screen.z/last_row.z};
 
             // refer to https://en.wikibooks.org/wiki/Cg_Programming/Rasterization, Perspectively Correct Interpolation
-            float frag_depth = -(dev_tri.v0.z*bc_over_z.x + dev_tri.v1.z*bc_over_z.y + dev_tri.v2.z*bc_over_z.z)
+//            float frag_depth = (dev_tri.v0.z * bc_over_z.x + dev_tri.v1.z * bc_over_z.y + dev_tri.v2.z * bc_over_z.z)
+//                    /(bc_over_z.x + bc_over_z.y + bc_over_z.z);
+
+            // this seems better
+            float frag_depth = (bc_screen.x + bc_screen.y + bc_screen.z)
                     /(bc_over_z.x + bc_over_z.y + bc_over_z.z);
 
-            size_t x_to_write = (width-1 - P[0] - roi.x);
-            size_t y_to_write = (height-1 - P[1] - roi.y);
+            size_t x_to_write = (P[0] - roi.x);
+            size_t y_to_write = (height - 1 - P[1] - roi.y);
 
             int32_t depth = int32_t(frag_depth/**1000*/ + 0.5f);
             int32_t& depth_to_write = depth_entry[x_to_write+y_to_write*real_width];
@@ -268,11 +278,11 @@ std::vector<int32_t> cuda_renderer::render_cpu(const std::vector<cuda_renderer::
             Model::Triangle local_tri = transform_triangle(tri, pose);
 //            if(normal_functor::is_back(local_tri)) continue;
 
-            // assume last column of projection matrix is  0 0 -1 0
+            // assume last column of projection matrix is  0 0 1 0
             Model::float3 last_row = {
-                -local_tri.v0.z,
-                -local_tri.v1.z,
-                -local_tri.v2.z
+                local_tri.v0.z,
+                local_tri.v1.z,
+                local_tri.v2.z
             };
             // projection transform
             local_tri = transform_triangle(local_tri, proj_mat);
@@ -287,4 +297,70 @@ std::vector<int32_t> cuda_renderer::render_cpu(const std::vector<cuda_renderer::
     return depth;
 }
 
+std::vector<cv::Mat> cuda_renderer::raw2depth_uint16_cpu(std::vector<int32_t> &raw_data, size_t width, size_t height, size_t pose_size)
+{
+    assert(raw_data.size() == width*height*pose_size);
 
+    std::vector<cv::Mat> depths(pose_size);
+    for(auto& dep: depths){
+        dep = cv::Mat(height, width, CV_16U, cv::Scalar(0));
+    }
+
+    size_t step = width*height;
+
+    for(size_t i=0; i<pose_size; i++){
+        for(int r=0; r<height; r++){
+            for(int c=0; c<width; c++){
+                depths[i].at<uint16_t>(r, c) = uint16_t(raw_data[i*step + width*r + c]);
+            }
+        }
+    }
+
+    return depths;
+}
+
+std::vector<cv::Mat> cuda_renderer::raw2mask_uint8_cpu(std::vector<int32_t> &raw_data, size_t width, size_t height, size_t pose_size)
+{
+    assert(raw_data.size() == width*height*pose_size);
+
+    std::vector<cv::Mat> masks(pose_size);
+    for(auto& mask: masks){
+        mask = cv::Mat(height, width, CV_8U, cv::Scalar(0));
+    }
+
+    size_t step = width*height;
+    for(size_t i=0; i<pose_size; i++){
+        for(int r=0; r<height; r++){
+            for(int c=0; c<width; c++){
+                masks[i].at<uchar>(r, c) = ((raw_data[i*step + width*r + c] > 0)?255:0);
+            }
+        }
+    }
+
+    return masks;
+}
+
+std::vector<std::vector<cv::Mat> > cuda_renderer::raw2depth_mask_cpu(std::vector<int32_t> &raw_data, size_t width, size_t height, size_t pose_size)
+{
+    assert(raw_data.size() == width*height*pose_size);
+
+    std::vector<std::vector<cv::Mat>> results(pose_size, std::vector<cv::Mat>(2));
+    for(auto& dep_mask: results){
+        dep_mask[0] = cv::Mat(height, width, CV_16U, cv::Scalar(0));
+        dep_mask[1] = cv::Mat(height, width, CV_8U, cv::Scalar(0));
+    }
+
+    size_t step = width*height;
+    for(size_t i=0; i<pose_size; i++){
+        for(int r=0; r<height; r++){
+            for(int c=0; c<width; c++){
+
+                auto& raw = raw_data[i*step + width*r + c];
+                results[i][0].at<uint16_t>(r, c) = uint16_t(raw);
+                results[i][1].at<uchar>(r, c) = ((raw > 0)?255:0);
+            }
+        }
+    }
+
+    return results;
+}

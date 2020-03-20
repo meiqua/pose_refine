@@ -121,7 +121,7 @@ RegistrationResult ICP_Point2Plane_cpu(std::vector<Vec3f> &model_pcd, const Scen
     RegistrationResult backup;
 
     std::vector<float> A_host(36, 0);
-    std::vector<float> b_host(36, 0);
+    std::vector<float> b_host(6, 0);
     thrust__pcd2Ab<Scene> trasnformer(scene);
 
     // use one extra turn

@@ -67,10 +67,14 @@ __global__ void BFS_tree_grow(Node_kdtree* nodes, int start, int end, int max_nu
         int right_iter = nodes[node_iter].right - 1;
         float split_low = -FLT_MAX;
         float split_high = FLT_MAX;
-
+        
+        bool lr_switch = true;
         for(int idx_iter = nodes[node_iter].left; idx_iter<nodes[node_iter].right; idx_iter++){
             float p = pcd_buffer[index[idx_iter]][split_dim];
-            if(p < split_val){
+
+            if(p == split_val) lr_switch = !lr_switch;
+
+            if(p < split_val || (p==split_val && lr_switch)){
                 index_buffer[left_iter] = index[idx_iter];
                 left_iter ++;
                 if(p > split_low) split_low = p;
@@ -158,6 +162,7 @@ void KDTree_cuda::build_tree(int max_num_pcd_in_leaf)
     while (!stop) { // when we have new nodes to split, go
 
         nodes_dev.resize(num_nodes_now_host[0]*2+1); // we may increase now + 1 in 1 turn
+        Node_kdtree* nodes_ptr = thrust::raw_pointer_cast(nodes_dev.data());
 
         num_nodes_last_last_turn = num_nodes_now_last_turn;
         num_nodes_now_last_turn = num_nodes_now_host[0]; // for iter, avoid reaching new node in 1 turn

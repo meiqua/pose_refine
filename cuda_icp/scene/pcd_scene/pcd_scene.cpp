@@ -40,6 +40,7 @@ void Scene_nn::init_Scene_nn_cpu(cv::Mat &scene_depth__, Mat3x3f &scene_K, KDTre
 // make it easy to transform to cuda implementation
 // the remained hard part is that idx of nodes are dependent
 // use cuda atomicAdd(fetch and add) looks fine
+// not enough, may need Dynamic Parallelism in cuda
 void KDTree_cpu::build_tree(int max_num_pcd_in_leaf)
 {
     assert(pcd_buffer.size() > 0 && pcd_buffer.size() == normal_buffer.size()
@@ -116,9 +117,13 @@ void KDTree_cpu::build_tree(int max_num_pcd_in_leaf)
                 float split_low = -FLT_MAX;
                 float split_high = FLT_MAX;
 
+                bool lr_switch = true;
                 for(int idx_iter = nodes[node_iter].left; idx_iter<nodes[node_iter].right; idx_iter++){
                     float p = pcd_buffer[index[idx_iter]][split_dim];
-                    if(p < split_val){
+
+                    if(p == split_val) lr_switch = !lr_switch;
+
+                    if(p < split_val || (p==split_val && lr_switch)){
                         index_buffer[left_iter] = index[idx_iter];
                         left_iter ++;
                         if(p > split_low) split_low = p;
