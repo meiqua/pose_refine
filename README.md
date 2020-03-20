@@ -14,6 +14,9 @@ key ideas:
 
 3. use cuda per-thread stream, we can handle multiple icps at once to make full use of gpu
 
-todo:  core functions are done, more test, api and documents in the future  
+For pcd scene, kdtree are built on cpu then transfered to gpu. [this branch](https://github.com/meiqua/pose_refine/tree/cuda_build_kdtree)
+may bring you some inspirations about how to build kdtree on GPU. Also the normals should be calculated on GPU if we want it faster.  
+
+See test.cpp on the outmost and in the cuda_renderer folder to learn how to use it.
 
 [Chinese blog](https://zhuanlan.zhihu.com/p/58757649)
