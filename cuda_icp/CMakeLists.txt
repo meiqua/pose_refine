@@ -3,7 +3,7 @@
 find_package(OpenCV 3 REQUIRED)
 list(APPEND icp_inc ${OpenCV_INCLUDE_DIRS})
 list(APPEND icp_lib ${OpenCV_LIBS})
-
+include_directories(${INCLUDE_DIRECTORIES} ${OpenCV_INCLUDE_DIRS})
 
 if(USE_CUDA)
 # cuda
@@ -16,7 +16,7 @@ endif()
 
 # eigen
 find_package(Eigen3 REQUIRED)
-include_directories(${EIGEN3_INCLUDE_DIR})
+include_directories(${INCLUDE_DIRECTORIES} ${EIGEN3_INCLUDE_DIR})
 
 
 # src

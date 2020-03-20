@@ -3,6 +3,7 @@
 find_package(OpenCV 3 REQUIRED)
 list(APPEND renderer_inc ${OpenCV_INCLUDE_DIRS})
 list(APPEND renderer_lib ${OpenCV_LIBS})
+include_directories(${INCLUDE_DIRECTORIES} ${OpenCV_INCLUDE_DIRS})
 
 if(USE_CUDA)
 # cuda
